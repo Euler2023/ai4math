@@ -1,0 +1,2 @@
+[console_scripts]
+ai4math = ai4math.cli:main
