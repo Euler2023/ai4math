@@ -1,0 +1,30 @@
+{
+  "domain": "algebra",
+  "theorems": [
+    {
+      "id": "sylow_theorems",
+      "name": "Sylow theorems",
+      "name_zh": "Sylow 定理",
+      "domains": [
+        "group_theory"
+      ],
+      "keywords": [
+        "Sylow",
+        "p-subgroup",
+        "子群"
+      ],
+      "signals": [
+        "Sylow",
+        "p-subgroup",
+        "p.*子群"
+      ],
+      "applicable_when": "分析有限群的 p-子群结构",
+      "reduces": "Sylow p-子群存在，个数 ≡ 1 mod p 且整除 |G|",
+      "prerequisites": [
+        "group order factorization"
+      ],
+      "sage_hint": "G.sylow_subgroup(p); G.order().factor()",
+      "related": []
+    }
+  ]
+}

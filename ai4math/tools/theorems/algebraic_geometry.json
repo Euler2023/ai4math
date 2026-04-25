@@ -1,0 +1,263 @@
+{
+  "domain": "algebraic_geometry",
+  "theorems": [
+    {
+      "id": "weil_zeta_curve",
+      "name": "Weil zeta function for curves",
+      "name_zh": "曲线的 Weil zeta 函数",
+      "domains": [
+        "algebraic_geometry",
+        "finite_fields"
+      ],
+      "keywords": [
+        "curve",
+        "finite field",
+        "point count",
+        "zeta",
+        "曲线",
+        "有限域",
+        "点数",
+        "nonzero points",
+        "projective"
+      ],
+      "signals": [
+        "\\\\mathbb\\{F\\}",
+        "F_{?\\d+\\^?\\d+}",
+        "GF\\(",
+        "over.*F_",
+        "points.*curve",
+        "curve.*over"
+      ],
+      "applicable_when": "计算光滑射影曲线在有限域或其扩张上的点数",
+      "reduces": "把 O(q^n) 逐点枚举降为计算 2g 维 Frobenius 特征多项式，其中 g 是 genus",
+      "prerequisites": [
+        "genus of the curve",
+        "Frobenius characteristic polynomial or Jacobian"
+      ],
+      "invariant_hints": [
+        "genus of the curve",
+        "Frobenius characteristic polynomial",
+        "zeta numerator",
+        "point counts over small base fields"
+      ],
+      "verification_hints": [
+        "check the final count against the Hasse-Weil bound",
+        "verify consistency with counts over small base fields",
+        "confirm the extension-field count follows the Frobenius eigenvalue recurrence"
+      ],
+      "confidence": "high",
+      "preferred_recipe": [
+        "verify curve is smooth and compute genus g",
+        "build C = Curve(f, ProjectiveSpace(GF(p), 2, 'x,y,z')) over the BASE field GF(p)",
+        "call C.count_points(g) to get [N_1, ..., N_g] over GF(p), GF(p^2), ..., GF(p^g)",
+        "derive Frobenius char poly P(T) via Newton identities from s_n = p^n + 1 - N_n",
+        "compute N_target = q^target + 1 - sum(alpha_i^target) where alpha_i are roots of P(T)"
+      ],
+      "avoid_patterns": [
+        "do not manually enumerate points with list comprehensions over GF(q^n) for n > 1",
+        "do not use rational_points() — use count_points(n) instead",
+        "do not construct ProjectiveSpace over extension fields GF(p^n) for n > 4"
+      ],
+      "sage_hint": "C = Curve(x^3*y + y^3*z + z^3*x, ProjectiveSpace(GF(p), 2, 'x,y,z')); pts = C.count_points(g); # then Newton identities to get Frobenius poly and N_target",
+      "related": [
+        "hasse_weil_bound",
+        "riemann_hypothesis_curves",
+        "lefschetz_trace"
+      ]
+    },
+    {
+      "id": "hasse_weil_bound",
+      "name": "Hasse-Weil bound",
+      "name_zh": "Hasse-Weil 界",
+      "domains": [
+        "algebraic_geometry",
+        "finite_fields"
+      ],
+      "keywords": [
+        "Hasse",
+        "Weil",
+        "bound",
+        "point count",
+        "estimate",
+        "界",
+        "点数估计"
+      ],
+      "signals": [
+        "Hasse",
+        "\\|.*N.*-.*q.*-.*1\\|",
+        "2g.*sqrt"
+      ],
+      "applicable_when": "估计有限域上曲线点数的范围",
+      "reduces": "给出 |#C(F_q) - q - 1| <= 2g*sqrt(q) 的界，无需精确计算",
+      "prerequisites": [
+        "genus"
+      ],
+      "invariant_hints": [
+        "genus"
+      ],
+      "verification_hints": [
+        "check the final count against the Hasse-Weil bound"
+      ],
+      "sage_hint": "genus = C.genus(); bound = 2*genus*sqrt(q)",
+      "related": [
+        "weil_zeta_curve"
+      ]
+    },
+    {
+      "id": "lefschetz_trace",
+      "name": "Lefschetz trace formula",
+      "name_zh": "Lefschetz 迹公式",
+      "domains": [
+        "algebraic_geometry",
+        "finite_fields"
+      ],
+      "keywords": [
+        "trace",
+        "Frobenius",
+        "Lefschetz",
+        "etale cohomology",
+        "迹",
+        "上同调"
+      ],
+      "signals": [
+        "Frobenius",
+        "trace",
+        "cohomology"
+      ],
+      "applicable_when": "通过 Frobenius 作用的迹计算有限域上簇的点数",
+      "reduces": "#X(F_q) = sum (-1)^i Tr(Frob | H^i)，把点数化为线性代数",
+      "prerequisites": [
+        "etale cohomology groups or Frobenius eigenvalues"
+      ],
+      "sage_hint": "For curves: use zeta function; for higher dim: may need explicit cohomology",
+      "related": [
+        "weil_zeta_curve"
+      ]
+    },
+    {
+      "id": "klein_quartic_automorphisms",
+      "name": "Klein quartic and PSL(2,7) symmetry",
+      "name_zh": "Klein 四次曲线与 PSL(2,7) 对称性",
+      "domains": [
+        "algebraic_geometry",
+        "group_theory"
+      ],
+      "keywords": [
+        "Klein",
+        "quartic",
+        "x^3y+y^3z+z^3x",
+        "PSL",
+        "automorphism",
+        "genus 3"
+      ],
+      "signals": [
+        "x\\^3.*y.*y\\^3.*z.*z\\^3.*x",
+        "Klein.*quartic"
+      ],
+      "applicable_when": "处理 Klein 四次曲线 x^3y+y^3z+z^3x=0 或其约化",
+      "reduces": "genus=3 的曲线，自同构群为 PSL(2,7)（168阶），Jacobian 可能分解为椭圆曲线的乘积",
+      "prerequisites": [
+        "characteristic of base field",
+        "whether curve is smooth mod p"
+      ],
+      "invariant_hints": [
+        "genus = 3",
+        "characteristic of base field",
+        "whether the curve is smooth mod p",
+        "automorphism structure",
+        "Jacobian decomposition or Weil polynomial"
+      ],
+      "verification_hints": [
+        "verify the curve remains smooth in the target characteristic",
+        "check the computed Weil polynomial against small-field point counts",
+        "confirm any Jacobian decomposition is compatible with the final point count"
+      ],
+      "confidence": "high",
+      "preferred_recipe": [
+        "confirm smoothness in target characteristic p",
+        "genus = 3 for Klein quartic; need only N_1, N_2, N_3 over base field GF(p)",
+        "use Weil zeta function recipe: C.count_points(3) then Newton identities"
+      ],
+      "avoid_patterns": [
+        "do not attempt brute-force point enumeration over large extension fields"
+      ],
+      "sage_hint": "Check smoothness; compute genus; for point counts use C.count_points(3) over small F_p then derive Frobenius poly via Newton identities",
+      "related": [
+        "weil_zeta_curve",
+        "jacobian_decomposition"
+      ]
+    },
+    {
+      "id": "jacobian_decomposition",
+      "name": "Jacobian decomposition into elliptic curves",
+      "name_zh": "Jacobian 分解为椭圆曲线",
+      "domains": [
+        "algebraic_geometry",
+        "elliptic_curves"
+      ],
+      "keywords": [
+        "Jacobian",
+        "decomposition",
+        "isogeny",
+        "elliptic",
+        "abelian variety"
+      ],
+      "signals": [
+        "Jacobian",
+        "isogen",
+        "decompos"
+      ],
+      "applicable_when": "曲线的 Jacobian 可分解为椭圆曲线的乘积时，简化点数计算",
+      "reduces": "把 genus g 曲线的 zeta 函数分解为 g 个椭圆曲线的 zeta 函数之积",
+      "prerequisites": [
+        "curve automorphisms",
+        "Jacobian structure"
+      ],
+      "invariant_hints": [
+        "Jacobian structure",
+        "elliptic curve factors",
+        "trace of Frobenius on each factor",
+        "zeta polynomial factorization"
+      ],
+      "verification_hints": [
+        "check that the factored zeta polynomial reproduces the final point count",
+        "verify each elliptic-curve factor is compatible with the claimed isogeny decomposition"
+      ],
+      "sage_hint": "J = C.jacobian(); or compute zeta polynomial and factor it",
+      "related": [
+        "weil_zeta_curve",
+        "klein_quartic_automorphisms"
+      ]
+    },
+    {
+      "id": "riemann_roch",
+      "name": "Riemann-Roch theorem",
+      "name_zh": "Riemann-Roch 定理",
+      "domains": [
+        "algebraic_geometry"
+      ],
+      "keywords": [
+        "Riemann-Roch",
+        "divisor",
+        "genus",
+        "因子",
+        "亏格"
+      ],
+      "signals": [
+        "Riemann.*Roch",
+        "l\\(D\\)",
+        "dim.*L\\(D\\)"
+      ],
+      "applicable_when": "计算曲线上线性系统的维数",
+      "reduces": "l(D) - l(K-D) = deg(D) - g + 1",
+      "prerequisites": [
+        "genus",
+        "divisor degree"
+      ],
+      "sage_hint": "C.genus(); divisor computations via function field",
+      "related": [
+        "weil_zeta_curve"
+      ]
+    }
+  ]
+}

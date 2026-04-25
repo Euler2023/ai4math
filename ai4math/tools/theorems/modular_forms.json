@@ -1,0 +1,157 @@
+{
+  "domain": "modular_forms",
+  "theorems": [
+    {
+      "id": "mock_theta_radial_limits",
+      "name": "Radial limits of mock theta functions (Folsom-Ono-Rhoades)",
+      "name_zh": "Mock theta 函数的径向极限 (Folsom-Ono-Rhoades)",
+      "domains": ["modular_forms", "number_theory"],
+      "keywords": ["mock theta", "radial limit", "Ramanujan", "q-series", "upper half plane", "径向极限", "limit", "lim"],
+      "signals": ["lim.*y.*0", "\\\\sum.*n\\^2.*z", "\\\\sum.*e\\^.*n\\^2", "\\\\prod.*(1[+-].*e\\^|1[+-].*q)", "mock.*theta", "radial", "upper.*half.*plane"],
+      "applicable_when": "计算 mock theta function 在有理点处 y→0+ 的极限值，或涉及 q-series 在单位根处的径向极限",
+      "reduces": "F(z) = f(q) 是 Ramanujan 三阶 mock theta function，G(z) = b(q) 是其 modular shadow（eta-quotient）。在偶数阶 2k 单位根 ζ 处，f(q) 和 b(q) 都有指数奇点，但 Folsom-Ono-Rhoades 定理给出精确有限差：lim_{q→ζ}(f(q) - (-1)^k b(q)) = -4ζ - 4·Σ_{n=1}^{k-1} (1+ζ)²(1+ζ²)²···(1+ζⁿ)²·ζ^{n+1}。由于 |b(q)| → ∞，F/G → (-1)^k，G/F → (-1)^k，所以 F/G - G/F → 0。因此 α = lim(F-G+F/G-G/F) = lim(F - (-1)^k G) + 0 = Folsom-Ono-Rhoades 常数（当 (-1)^k = 1 时）",
+      "prerequisites": ["identify the mock theta function type", "the rational point h/k and denominator k", "the associated shadow or modular completion"],
+      "invariant_hints": [
+        "F(z) = f(q) is Ramanujan's 3rd order mock theta; G(z) = b(q) is its modular shadow",
+        "G(z) = b(q) = prod(1-q^n)^3 / prod(1-q^{2n})^2 (eta-quotient, has exponential singularity at even-order roots of unity)",
+        "the rational point h/k: for z0 = ell_1/(4*ell_2), we have h = ell_1, k = 4*ell_2, and zeta = e^{2*pi*i*h/k}",
+        "the order of zeta as root of unity is k (when gcd(h,k)=1), so 2*k_half = k, k_half = k/2",
+        "Folsom-Ono-Rhoades formula: lim(f(q) - (-1)^{k_half} b(q)) = -4*zeta - 4*sum_{n=1}^{k_half-1} prod_{j=1}^{n}(1+zeta^j)^2 * zeta^{n+1}",
+        "since |b(q)| -> infinity exponentially, F/G -> (-1)^{k_half} and G/F -> (-1)^{k_half}, so F/G - G/F -> 0",
+        "therefore alpha = lim(F-G+F/G-G/F) = Folsom-Ono-Rhoades constant (a finite sum, no singularities)"
+      ],
+      "verification_hints": [
+        "verify the limit is algebraic by computing its minimal polynomial",
+        "cross-check: evaluate F and G numerically at y=0.1, 0.01 and check convergence trend",
+        "confirm the minimal polynomial is irreducible over Q",
+        "check degree of minimal polynomial divides phi(k) or related index"
+      ],
+      "preferred_recipe": [
+        "identify F(z) as a known mock theta function before doing any computation",
+        "extract the rational point h/k and work in CyclotomicField(k)",
+        "replace the radial limit by the finite roots-of-unity formula",
+        "compute alpha exactly before asking for minpoly()"
+      ],
+      "avoid_patterns": [
+        "do not numerically approximate the y -> 0+ radial limit by shrinking eps",
+        "do not truncate divergent q-series at floating-point q near a root of unity",
+        "do not spend multiple tool calls probing different eps values"
+      ],
+      "confidence": "high",
+      "sage_hint": "CRITICAL: Do NOT evaluate G(z)=b(q) directly at a root of unity (it has exponential singularity). Instead use the Folsom-Ono-Rhoades finite formula.\nFor z0 = ell_1/(4*ell_2), set k = 4*ell_2, h = ell_1, k_half = k//2.\nzeta = e^{2*pi*i*h/k} is a primitive k-th root of unity.\nSince |b(q)| -> infinity, F/G -> (-1)^k_half and G/F -> (-1)^k_half, so F/G - G/F -> 0.\nTherefore alpha = lim(F - G + F/G - G/F) = lim(F - (-1)^k_half * G) (when (-1)^k_half = 1) = Folsom-Ono-Rhoades constant.\nFORMULA: alpha = -4*zeta - 4*sum_{n=1}^{k_half-1} prod_{j=1}^{n}(1+zeta^j)^2 * zeta^{n+1}\nSageMath code:\nk = 4*ell_2; h = ell_1; k_half = k // 2\nK.<z> = CyclotomicField(k)\nzeta = z^h\nalpha = -4*zeta - 4*sum(prod((1+zeta^j)^2 for j in range(1,n+1)) * zeta^(n+1) for n in range(1, k_half))\nP = alpha.minpoly(); print('P =', P)\nK_alpha = NumberField(P, 'a')\nGal = K_alpha.galois_closure('b')\ndeg = Gal.degree()\nOmega = (P(ell_1) + P(ell_2))^(ell_2-1) / deg\nprint('Omega =', Omega)",
+      "related": ["eta_quotient_evaluation", "modular_forms_at_cusps", "mock_theta_identification"]
+    },
+    {
+      "id": "mock_theta_identification",
+      "name": "Identification of common mock theta functions",
+      "name_zh": "常见 mock theta 函数的识别",
+      "domains": ["modular_forms", "number_theory"],
+      "keywords": ["mock theta", "Ramanujan", "q-series", "third order", "fifth order", "omega", "f(q)", "phi(q)"],
+      "signals": ["q\\^\\{?n\\^2\\}?.*prod", "sum.*q.*n\\^2.*prod", "\\\\frac\\{.*e\\^.*n\\^2", "1\\+.*sum.*frac"],
+      "applicable_when": "识别一个 q-series 是否为已知的 mock theta function",
+      "reduces": "一旦识别出 mock theta 类型，就可以调用对应的径向极限公式，而不需要从头推导",
+      "prerequisites": ["the q-series definition"],
+      "invariant_hints": [
+        "Ramanujan 3rd order f(q) = sum_{n>=0} q^{n^2} / (-q;q)_n^2 = sum_{n>=0} q^{n^2} / prod_{j=1}^n (1+q^j)^2",
+        "Ramanujan 3rd order phi(q) = sum_{n>=0} q^{n^2} / (-q^2;q^2)_n",
+        "Ramanujan 3rd order psi(q) = sum_{n>=1} q^{n^2} / (q;q^2)_n",
+        "Ramanujan 3rd order chi(q) = sum_{n>=0} q^{n^2} (-q;q)_n",
+        "Ramanujan 3rd order omega(q) = sum_{n>=0} q^{2n(n+1)} / (q;q^2)_{n+1}^2",
+        "if F(z) = 1 + sum e^{2pi i n^2 z} / prod (1+e^{2pi i j z})^2, then F(z) = f(q) with q=e^{2pi i z}"
+      ],
+      "verification_hints": [
+        "verify by comparing first few q-expansion coefficients with known OEIS sequences",
+        "check: f(q) starts 1 + q/(1+q)^2 + q^4/((1+q)(1+q^2))^2 + ..."
+      ],
+      "sage_hint": "To verify identification: compute first 20 terms of the q-expansion symbolically and compare with known mock theta tables. For f(q): PowerSeriesRing(QQ,'q'); sum(q^(n^2)/prod((1+q^j)^2 for j in range(1,n+1)) for n in range(20)).",
+      "related": ["mock_theta_radial_limits"]
+    },
+    {
+      "id": "eta_quotient_evaluation",
+      "name": "Eta-quotient evaluation at rational points",
+      "name_zh": "Eta 商在有理点的取值",
+      "domains": ["modular_forms", "number_theory"],
+      "keywords": ["eta function", "Dedekind eta", "eta quotient", "eta-quotient", "q-product", "cusp"],
+      "signals": ["\\\\prod.*1-e\\^\\{2.*pi.*i.*n", "\\\\prod.*\\\\frac\\{.*1-", "eta", "Dedekind", "\\\\prod.*\\\\frac.*(1-.*)(1-.*)/(1\\+.*)"],
+      "applicable_when": "计算 Dedekind eta 函数或 eta-quotient 在有理点/尖点处的值",
+      "reduces": "eta-quotient 在有理点 h/k 处的值可以用 roots of unity 的有限乘积精确计算。关键：prod_{n=1}^{infinity} (1-zeta^n) 在 zeta 为 primitive k-th root of unity 时等于 k（当 zeta^k=1 时 prod_{n=1}^{k-1}(1-zeta^n) = k）",
+      "prerequisites": ["the eta-quotient formula", "the rational point h/k", "factorization into eta functions"],
+      "invariant_hints": [
+        "eta(tau) = q^{1/24} prod_{n>=1} (1-q^n), q = e^{2pi i tau}",
+        "prod_{n=1}^{k-1} (1-zeta_k^n) = k for primitive k-th root zeta_k",
+        "G(z) = prod (1-q^n)(1-q^{2n-1})/(1+q^n) = eta(tau)^3 / eta(2*tau)^2 * q^{1/24} (up to q-power)",
+        "at rational point h/k: evaluate as finite product over n=1..k using zeta_k = exp(2*pi*I*h/k)",
+        "use CyclotomicField for exact computation"
+      ],
+      "verification_hints": [
+        "verify the value is algebraic",
+        "check: the product should stabilize (become periodic) after n=k terms",
+        "confirm consistency with modular transformation formulas"
+      ],
+      "preferred_recipe": [
+        "rewrite the product as an eta-quotient or periodic finite product at zeta_k",
+        "evaluate in CyclotomicField(k) instead of floating point",
+        "combine with the mock theta finite-sum expression only after both pieces are exact"
+      ],
+      "avoid_patterns": [
+        "do not evaluate the infinite product numerically near a root of unity",
+        "do not try many truncation lengths without switching to exact roots-of-unity arithmetic"
+      ],
+      "confidence": "high",
+      "sage_hint": "K = CyclotomicField(k); zeta = K.gen(); G_val = prod((1-zeta^n)*(1-zeta^(2*n-1))/(1+zeta^n) for n in range(1, k+1)). Use exact cyclotomic arithmetic, NOT floating point.",
+      "related": ["mock_theta_radial_limits", "modular_forms_at_cusps"]
+    },
+    {
+      "id": "modular_forms_at_cusps",
+      "name": "Evaluation of modular forms at cusps / rational points",
+      "name_zh": "模形式在尖点/有理点处的取值",
+      "domains": ["modular_forms", "algebraic_geometry"],
+      "keywords": ["modular form", "cusp", "rational point", "special value", "模形式", "尖点"],
+      "signals": ["modular.*form.*at", "value.*cusp", "F\\(.*h/k"],
+      "applicable_when": "计算模形式在有理数或尖点处的精确值",
+      "reduces": "模形式在尖点处的值由其 q-展开的有限项和 modular transformation 决定，可精确计算",
+      "prerequisites": ["modular form level and weight", "cusp data"],
+      "invariant_hints": ["level N", "weight k", "character", "cusp width", "Atkin-Lehner eigenvalues"],
+      "verification_hints": ["check algebraicity of the value", "verify via modular transformation formula"],
+      "sage_hint": "ModularForms(N, k); f.q_expansion(); or use modular symbols",
+      "related": ["eta_quotient_evaluation"]
+    },
+    {
+      "id": "radial_limit_computation_recipe",
+      "name": "Computational recipe for radial limits of q-series at roots of unity",
+      "name_zh": "q-级数在单位根处径向极限的计算方法",
+      "domains": ["modular_forms", "number_theory", "algebra"],
+      "keywords": ["radial limit", "root of unity", "q-series", "limit", "cyclotomic", "finite sum"],
+      "signals": ["lim.*y.*0\\+", "lim.*q.*zeta", "e\\^\\{2.*pi.*i.*h/k"],
+      "applicable_when": "需要计算 q-series（mock theta 或 eta-quotient）在 q 趋向单位根时的极限",
+      "reduces": "把发散的无穷级数/乘积转化为有限的精确代数运算",
+      "prerequisites": ["the q-series type", "the target rational point h/k"],
+      "invariant_hints": [
+        "step 1: identify h and k from the rational point (e.g. ell_1/(4*ell_2) → h=ell_1, k=4*ell_2, k_half=k//2)",
+        "step 2: set zeta = CyclotomicField(k).gen()^h (exact primitive k-th root of unity)",
+        "step 3: recognize F(z)=f(q) and G(z)=b(q); both diverge at even-order roots of unity",
+        "step 4: apply Folsom-Ono-Rhoades: lim(f-(-1)^{k_half}*b) = -4*zeta - 4*sum_{n=1}^{k_half-1} prod_{j=1}^{n}(1+zeta^j)^2 * zeta^{n+1}",
+        "step 5: since |b(q)|->inf, F/G->(-1)^{k_half}, G/F->(-1)^{k_half}, so F/G-G/F->0",
+        "step 6: alpha = Folsom-Ono-Rhoades constant (finite sum, no singularities)",
+        "step 7: use minpoly() on alpha, then galois_closure() for splitting field degree"
+      ],
+      "verification_hints": [
+        "the result should be an algebraic number in CyclotomicField(k) or a subfield",
+        "minimal polynomial should have rational coefficients",
+        "degree of minimal polynomial divides euler_phi(k)"
+      ],
+      "preferred_recipe": [
+        "extract h and k first, then define zeta in CyclotomicField(k)",
+        "compute F_val and G_val as exact finite expressions before forming alpha",
+        "only after alpha is exact, call minpoly() and galois_closure()"
+      ],
+      "avoid_patterns": [
+        "do not alternate between many numerical experiments and symbolic experiments without committing to the exact roots-of-unity route",
+        "do not burn multiple tool calls on shrinking eps once a radial-limit theorem is matched"
+      ],
+      "confidence": "high",
+      "sage_hint": "FORMULA (Folsom-Ono-Rhoades Theorem 1.1):\nFor zeta = primitive 2k-th root of unity (i.e. order of zeta is 2k):\nlim_{q->zeta}(f(q) - (-1)^k * b(q)) = -4*zeta - 4*sum_{n=1}^{k-1} prod_{j=1}^{n}(1+zeta^j)^2 * zeta^{n+1}\nwhere f(q) = F(z) is the mock theta function and b(q) = G(z) is the modular shadow.\nSince |b(q)| -> infinity exponentially, F/G -> (-1)^k and G/F -> (-1)^k, so F/G - G/F -> 0.\nTherefore alpha = lim(F - G + F/G - G/F) = lim(F - (-1)^k G) + 0.\nSageMath implementation:\nk = 4*ell_2; k_half = k // 2\nK.<z> = CyclotomicField(k)\nzeta = z^ell_1\nalpha = -4*zeta - 4*sum(prod((1+zeta^j)^2 for j in range(1,n+1)) * zeta^(n+1) for n in range(1, k_half))\nP = alpha.minpoly()\nK_alpha = NumberField(P, 'a')\nGal = K_alpha.galois_closure('b')\ndeg = Gal.degree()\nOmega = (P(ell_1) + P(ell_2))^(ell_2-1) / deg",
+      "related": ["mock_theta_radial_limits", "eta_quotient_evaluation"]
+    }
+  ]
+}

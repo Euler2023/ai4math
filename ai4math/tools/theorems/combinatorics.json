@@ -1,0 +1,71 @@
+{
+  "domain": "combinatorics",
+  "theorems": [
+    {
+      "id": "burnside_lemma",
+      "name": "Burnside's lemma (Cauchy-Frobenius)",
+      "name_zh": "Burnside 引理",
+      "domains": [
+        "combinatorics",
+        "group_theory"
+      ],
+      "keywords": [
+        "Burnside",
+        "orbit",
+        "counting",
+        "symmetry",
+        "up to",
+        "轨道",
+        "计数",
+        "对称"
+      ],
+      "signals": [
+        "up to.*scal",
+        "up to.*symmetr",
+        "orbit",
+        "modulo.*action"
+      ],
+      "applicable_when": "在群作用下计数不等价对象（如 up to scaling, up to rotation）",
+      "reduces": "|X/G| = (1/|G|) * sum |Fix(g)|，把等价类计数化为不动点计数",
+      "prerequisites": [
+        "group G acting on set X",
+        "fixed point counts for each group element"
+      ],
+      "sage_hint": "Compute fixed points for each group element; sum and divide by |G|",
+      "related": [
+        "polya_enumeration"
+      ]
+    },
+    {
+      "id": "polya_enumeration",
+      "name": "Polya enumeration theorem",
+      "name_zh": "Polya 计数定理",
+      "domains": [
+        "combinatorics",
+        "group_theory"
+      ],
+      "keywords": [
+        "Polya",
+        "cycle index",
+        "coloring",
+        "necklace",
+        "循环指标"
+      ],
+      "signals": [
+        "Polya",
+        "cycle.*index",
+        "necklace",
+        "coloring"
+      ],
+      "applicable_when": "在对称群作用下计数着色方案或组合结构",
+      "reduces": "用循环指标多项式统一计算",
+      "prerequisites": [
+        "cycle index of the group"
+      ],
+      "sage_hint": "G.cycle_index()",
+      "related": [
+        "burnside_lemma"
+      ]
+    }
+  ]
+}

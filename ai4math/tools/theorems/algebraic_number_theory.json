@@ -1,0 +1,197 @@
+{
+  "domain": "algebraic_number_theory",
+  "theorems": [
+    {
+      "id": "artin_reciprocity",
+      "name": "Artin reciprocity / class field theory",
+      "name_zh": "Artin 互反律 / 类域论",
+      "domains": [
+        "algebraic_number_theory"
+      ],
+      "keywords": [
+        "Artin",
+        "reciprocity",
+        "class field",
+        "splitting",
+        "互反",
+        "类域",
+        "分裂"
+      ],
+      "signals": [
+        "Artin",
+        "class.*field",
+        "split.*completely",
+        "完全分裂"
+      ],
+      "applicable_when": "判断素数在数域扩张中的分裂类型，或证明分裂条件等价于某种算术条件",
+      "reduces": "素数 p 在 K/Q 中的分裂类型由 p 在某个类群中的像决定",
+      "prerequisites": [
+        "number field extension",
+        "conductor",
+        "class group"
+      ],
+      "sage_hint": "K.ideal(p).factor(); K.class_group()",
+      "related": [
+        "chebotarev_density",
+        "quadratic_reciprocity"
+      ]
+    },
+    {
+      "id": "chebotarev_density",
+      "name": "Chebotarev density theorem",
+      "name_zh": "Chebotarev 密度定理",
+      "domains": [
+        "algebraic_number_theory"
+      ],
+      "keywords": [
+        "Chebotarev",
+        "density",
+        "Frobenius",
+        "conjugacy class",
+        "密度",
+        "共轭类"
+      ],
+      "signals": [
+        "Chebotarev",
+        "density.*split",
+        "Frobenius.*class"
+      ],
+      "applicable_when": "确定满足某种分裂条件的素数的密度",
+      "reduces": "密度 = |C|/|G|，其中 C 是 Galois 群中的共轭类",
+      "prerequisites": [
+        "Galois group of extension",
+        "conjugacy classes"
+      ],
+      "sage_hint": "K.galois_group(); use galois_group_chebotarev tool for high degree",
+      "related": [
+        "artin_reciprocity"
+      ]
+    },
+    {
+      "id": "dedekind_zeta",
+      "name": "Dedekind zeta function",
+      "name_zh": "Dedekind zeta 函数",
+      "domains": [
+        "algebraic_number_theory"
+      ],
+      "keywords": [
+        "Dedekind",
+        "zeta",
+        "number field",
+        "L-function",
+        "数域"
+      ],
+      "signals": [
+        "Dedekind.*zeta",
+        "zeta_K"
+      ],
+      "applicable_when": "计算数域的解析不变量或素数分布",
+      "reduces": "把数域中的素理想计数化为 L 函数的解析性质",
+      "prerequisites": [
+        "number field",
+        "discriminant"
+      ],
+      "sage_hint": "K.zeta_function() or K.discriminant()",
+      "related": [
+        "class_number_formula"
+      ]
+    },
+    {
+      "id": "class_number_formula",
+      "name": "Class number formula",
+      "name_zh": "类数公式",
+      "domains": [
+        "algebraic_number_theory"
+      ],
+      "keywords": [
+        "class number",
+        "regulator",
+        "discriminant",
+        "类数",
+        "判别式"
+      ],
+      "signals": [
+        "class.*number",
+        "h_K",
+        "类数"
+      ],
+      "applicable_when": "计算数域的类数或验证类数相关性质",
+      "reduces": "类数由判别式、regulator、单位群等解析量决定",
+      "prerequisites": [
+        "discriminant",
+        "unit group",
+        "regulator"
+      ],
+      "sage_hint": "K.class_number(); K.regulator(); K.discriminant()",
+      "related": [
+        "dedekind_zeta"
+      ]
+    },
+    {
+      "id": "ideal_factorization_dedekind",
+      "name": "Dedekind's theorem on prime ideal factorization",
+      "name_zh": "Dedekind 素理想分解定理",
+      "domains": [
+        "algebraic_number_theory"
+      ],
+      "keywords": [
+        "ideal",
+        "factorization",
+        "splitting",
+        "ramification",
+        "inert",
+        "理想分解",
+        "分裂",
+        "惰性",
+        "分歧"
+      ],
+      "signals": [
+        "ideal.*factor",
+        "split.*inert.*ramif",
+        "分裂.*惰性.*分歧"
+      ],
+      "applicable_when": "计算素数在数域整数环中的分解类型",
+      "reduces": "p 的分解由最小多项式 mod p 的因式分解决定",
+      "prerequisites": [
+        "minimal polynomial",
+        "ring of integers basis"
+      ],
+      "sage_hint": "K.ideal(p).factor()",
+      "related": [
+        "artin_reciprocity"
+      ]
+    },
+    {
+      "id": "galois_correspondence",
+      "name": "Fundamental theorem of Galois theory",
+      "name_zh": "Galois 理论基本定理",
+      "domains": [
+        "algebra",
+        "algebraic_number_theory"
+      ],
+      "keywords": [
+        "Galois",
+        "correspondence",
+        "subfield",
+        "subgroup",
+        "对应",
+        "子域",
+        "子群"
+      ],
+      "signals": [
+        "Galois.*correspond",
+        "subfield.*subgroup"
+      ],
+      "applicable_when": "在 Galois 扩张中建立子群与中间域的对应",
+      "reduces": "子群 H ↔ 不动域 K^H，把域论问题化为群论问题",
+      "prerequisites": [
+        "Galois group"
+      ],
+      "sage_hint": "K.galois_group(); G.subgroups()",
+      "related": [
+        "artin_reciprocity",
+        "chebotarev_density"
+      ]
+    }
+  ]
+}

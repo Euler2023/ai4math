@@ -1,0 +1,69 @@
+{
+  "domain": "elliptic_curves",
+  "theorems": [
+    {
+      "id": "hasse_bound_ec",
+      "name": "Hasse bound for elliptic curves",
+      "name_zh": "椭圆曲线的 Hasse 界",
+      "domains": ["elliptic_curves", "finite_fields"],
+      "keywords": ["elliptic curve", "Hasse", "bound", "椭圆曲线", "点数"],
+      "signals": ["\\|.*a_p\\|", "2.*sqrt.*p", "elliptic.*F_"],
+      "applicable_when": "估计或计算椭圆曲线在有限域上的点数",
+      "reduces": "|#E(F_p) - p - 1| <= 2*sqrt(p)，且 #E(F_{p^n}) 可由 a_p 递推",
+      "prerequisites": ["trace of Frobenius a_p"],
+      "invariant_hints": ["trace of Frobenius a_p", "characteristic polynomial of Frobenius", "base-field point count"],
+      "verification_hints": ["check the elliptic-curve count against the Hasse bound", "verify extension-field counts satisfy the Frobenius recurrence"],
+      "sage_hint": "E.trace_of_frobenius(); E.count_points(n)",
+      "related": ["weil_zeta_curve"]
+    },
+    {
+      "id": "mordell_weil",
+      "name": "Mordell-Weil theorem",
+      "name_zh": "Mordell-Weil 定理",
+      "domains": ["elliptic_curves", "number_theory"],
+      "keywords": ["Mordell-Weil", "rank", "torsion", "generator", "秩", "生成元", "扭子群"],
+      "signals": ["Mordell", "rank.*torsion", "E\\(Q\\)"],
+      "applicable_when": "确定有理数域上椭圆曲线的有限生成阿贝尔群结构",
+      "reduces": "E(Q) ≅ Z^r × T，只需计算秩 r 和扭子群 T",
+      "prerequisites": ["elliptic curve equation"],
+      "sage_hint": "E.rank(); E.torsion_subgroup(); E.gens()",
+      "related": ["hasse_bound_ec", "congruent_number_tunnell"]
+    },
+    {
+      "id": "congruent_number_tunnell",
+      "name": "Congruent number problem and Tunnell's theorem",
+      "name_zh": "同余数问题与 Tunnell 定理",
+      "domains": ["elliptic_curves", "number_theory"],
+      "keywords": ["congruent number", "Tunnell", "同余数", "rank", "Y^2=X^3-n^2X", "right triangle"],
+      "signals": ["Y\\^2.*=.*X\\^3.*-.*\\^2.*X", "X\\^3.*-.*n\\^2.*X", "X\\^3.*-.*ell.*\\^2.*X", "X\\^3.*-.*l_1\\^2.*X", "\\\\mathbb.*Z/2.*Z/2", "congruent.*number"],
+      "applicable_when": "判断椭圆曲线 Y^2 = X^3 - n^2 X 的秩是否为 0（等价于 n 是否为同余数）",
+      "reduces": "Y^2 = X^3 - n^2 X 是同余数椭圆曲线。n 是同余数当且仅当该曲线的秩 > 0。对该曲线，torsion 自动为 Z/2Z × Z/2Z。因此 E(Q) = Z/2Z × Z/2Z 等价于 rank = 0 等价于 n 不是同余数。对素数 p：p ≡ 5, 6, 7 (mod 8) 时 p 是同余数（rank ≥ 1）；p ≡ 3 (mod 8) 时 p 不是同余数（rank = 0）；p ≡ 1 (mod 8) 时需要进一步判定（Tunnell 定理或直接算 rank）。特别地，对满足 p ≡ 3 (mod 4) 的素数，条件 p ≡ 3 (mod 8) 等价于 rank = 0。",
+      "prerequisites": ["the integer n (from the curve equation Y^2=X^3-n^2*X)"],
+      "invariant_hints": [
+        "Y^2 = X^3 - n^2 X 是同余数曲线，torsion 恒为 Z/2Z × Z/2Z",
+        "rank = 0 iff n 不是同余数 iff E(Q) = Z/2Z × Z/2Z",
+        "素数 p ≡ 3 (mod 8)：不是同余数，rank = 0",
+        "素数 p ≡ 5 或 7 (mod 8)：是同余数，rank ≥ 1",
+        "素数 p ≡ 1 (mod 8)：需要 Tunnell 定理或 E.rank() 判定",
+        "Tunnell 定理（假设 BSD）：奇无平方因子 n 是同余数 iff #{2x²+y²+32z²=n} = #{2x²+y²+8z²=n}"
+      ],
+      "verification_hints": [
+        "cross-check Tunnell result with E.rank() for small n",
+        "verify n is squarefree (or reduce to squarefree part first)",
+        "confirm torsion is Z/2Z × Z/2Z as expected"
+      ],
+      "preferred_recipe": [
+        "先用 mod 8 判据排除/确认，再决定是否需要更重的计算",
+        "对 p ≡ 3 mod 4 的素数搜索，条件 4 等价于 p ≡ 3 mod 8，一行模运算即可",
+        "只有 p ≡ 1 mod 8 时才需要 Tunnell 或 E.rank()"
+      ],
+      "avoid_patterns": [
+        "不要对每个候选素数都调用 E.rank()，先看 mod 8",
+        "不要重复计算同一条曲线的 rank"
+      ],
+      "confidence": "high",
+      "sage_hint": "For primes p ≡ 3 mod 8: rank=0 (not congruent). For p ≡ 5,7 mod 8: rank≥1 (congruent). Only p ≡ 1 mod 8 needs E.rank() or Tunnell.",
+      "related": ["mordell_weil", "bsd_conjecture"]
+    }
+  ]
+}

@@ -1,0 +1,210 @@
+{
+  "domain": "number_theory",
+  "theorems": [
+    {
+      "id": "quadratic_reciprocity",
+      "name": "Quadratic reciprocity",
+      "name_zh": "二次互反律",
+      "domains": [
+        "number_theory"
+      ],
+      "keywords": [
+        "quadratic reciprocity",
+        "Legendre symbol",
+        "二次互反",
+        "Legendre"
+      ],
+      "signals": [
+        "Legendre",
+        "\\(.*\\|.*p\\)",
+        "quadratic.*residu"
+      ],
+      "applicable_when": "判断 a 是否为模 p 的二次剩余",
+      "reduces": "把二次剩余判定化为 Legendre 符号计算",
+      "prerequisites": [
+        "prime p",
+        "integer a"
+      ],
+      "sage_hint": "kronecker_symbol(a, p) or legendre_symbol(a, p)",
+      "related": [
+        "artin_reciprocity"
+      ]
+    },
+    {
+      "id": "representation_by_forms",
+      "name": "Representation of primes by binary quadratic forms",
+      "name_zh": "素数的二次型表示",
+      "domains": [
+        "number_theory",
+        "algebraic_number_theory"
+      ],
+      "keywords": [
+        "representation",
+        "quadratic form",
+        "a^2+nb^2",
+        "二次型",
+        "表示"
+      ],
+      "signals": [
+        "a\\^2.*b\\^2",
+        "represent.*prime",
+        "p\\s*=\\s*a"
+      ],
+      "applicable_when": "判断素数能否表示为某种二次型",
+      "reduces": "p = a²+nb² 等价于 p 在 Q(√-n) 中分裂且满足类群条件",
+      "prerequisites": [
+        "class group of Q(√-n)",
+        "splitting conditions"
+      ],
+      "sage_hint": "Use explore_structure with topic='representation'",
+      "related": [
+        "artin_reciprocity",
+        "class_number_formula"
+      ]
+    },
+    {
+      "id": "crt",
+      "name": "Chinese Remainder Theorem",
+      "name_zh": "中国剩余定理",
+      "domains": [
+        "number_theory",
+        "algebra"
+      ],
+      "keywords": [
+        "CRT",
+        "Chinese Remainder",
+        "simultaneous congruence",
+        "中国剩余",
+        "同余方程组"
+      ],
+      "signals": [
+        "CRT",
+        "Chinese",
+        "simultaneous.*congru",
+        "同余.*方程组"
+      ],
+      "applicable_when": "求解联立同余方程组或分解模运算",
+      "reduces": "把模 mn 的计算分解为模 m 和模 n 的独立计算",
+      "prerequisites": [
+        "pairwise coprime moduli"
+      ],
+      "sage_hint": "crt(remainders, moduli)",
+      "related": []
+    },
+    {
+      "id": "hensel_lemma",
+      "name": "Hensel's lemma",
+      "name_zh": "Hensel 引理",
+      "domains": [
+        "number_theory",
+        "p_adic"
+      ],
+      "keywords": [
+        "Hensel",
+        "lifting",
+        "p-adic",
+        "提升"
+      ],
+      "signals": [
+        "Hensel",
+        "lift.*mod.*p",
+        "p-adic"
+      ],
+      "applicable_when": "将模 p 的解提升到模 p^k 的解",
+      "reduces": "只需找到模 p 的简单根，即可自动提升到任意精度",
+      "prerequisites": [
+        "solution mod p",
+        "non-vanishing derivative"
+      ],
+      "sage_hint": "Solve mod p first, then lift using Hensel",
+      "related": [
+        "crt"
+      ]
+    },
+    {
+      "id": "euler_product",
+      "name": "Euler product formula for zeta/L-functions",
+      "name_zh": "zeta/L 函数的 Euler 乘积",
+      "domains": [
+        "number_theory",
+        "analytic_number_theory"
+      ],
+      "keywords": [
+        "Euler product",
+        "zeta",
+        "L-function",
+        "Euler 乘积"
+      ],
+      "signals": [
+        "Euler.*product",
+        "\\\\prod.*prime",
+        "zeta.*=.*prod"
+      ],
+      "applicable_when": "将 zeta 或 L 函数表示为素数上的乘积",
+      "reduces": "把无穷级数化为素数上的局部因子之积",
+      "prerequisites": [
+        "multiplicative function"
+      ],
+      "sage_hint": "Use symbolic zeta or L-function computation",
+      "related": [
+        "dedekind_zeta"
+      ]
+    },
+    {
+      "id": "fermat_little",
+      "name": "Fermat's little theorem",
+      "name_zh": "费马小定理",
+      "domains": [
+        "number_theory"
+      ],
+      "keywords": [
+        "Fermat",
+        "little",
+        "费马小定理"
+      ],
+      "signals": [
+        "a\\^\\{?p-1\\}?.*mod",
+        "Fermat"
+      ],
+      "applicable_when": "简化模素数的幂运算",
+      "reduces": "a^(p-1) ≡ 1 (mod p)，指数可模 p-1 化简",
+      "prerequisites": [
+        "prime p",
+        "gcd(a,p)=1"
+      ],
+      "sage_hint": "power_mod(a, p-1, p)",
+      "related": [
+        "quadratic_reciprocity"
+      ]
+    },
+    {
+      "id": "waring_problem",
+      "name": "Waring's problem / circle method",
+      "name_zh": "华林问题 / 圆法",
+      "domains": [
+        "number_theory",
+        "analytic_number_theory"
+      ],
+      "keywords": [
+        "Waring",
+        "sum of powers",
+        "circle method",
+        "华林",
+        "幂和"
+      ],
+      "signals": [
+        "sum.*k-th.*power",
+        "Waring",
+        "circle.*method"
+      ],
+      "applicable_when": "将整数表示为 k 次幂之和",
+      "reduces": "用解析方法（圆法）估计表示数",
+      "prerequisites": [
+        "exponent k",
+        "number of summands"
+      ],
+      "sage_hint": "Brute force for small cases; analytic for asymptotics",
+      "related": []
+    }
+  ]
+}
