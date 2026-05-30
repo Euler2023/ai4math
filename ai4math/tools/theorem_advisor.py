@@ -258,8 +258,27 @@ _MULTISTEP_RE = re.compile(
     re.IGNORECASE,
 )
 
+_CONSTRUCTIVE_MODULAR_SIGNAL_PATTERNS = (
+    r"construct|构造",
+    r"harmonic\s+weak\s+maass|weak\s+maass|maass\s+form|调和弱\s*maass",
+    r"holomorphic\s+part|holomorphic",
+    r"cm\s+point|heegner|复乘点",
+    r"hecke\s+translate|hecke",
+    r"trace(?:d)?\s+to\s*(?:q|\\mathbb\{q\})|trace",
+    r"catalan(?:'s)?\s+constant|catalan|L\(\s*2\s*,\s*chi",
+)
 
-def _assess_structural_complexity(text: str, domain_count: int) -> dict[str, Any]:
+
+def _requires_theory_first_construction(text: str, matched: list[dict[str, Any]]) -> bool:
+    signal_count = sum(
+        1 for pattern in _CONSTRUCTIVE_MODULAR_SIGNAL_PATTERNS
+        if re.search(pattern, text, re.IGNORECASE)
+    )
+    has_modular_match = any("modular_forms" in thm.get("domains", []) for thm in matched)
+    return signal_count >= 3 or (signal_count >= 2 and has_modular_match)
+
+
+def _assess_structural_complexity(text: str, domain_count: int, matched: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     reasons: list[str] = []
     length = len(text)
     sentences = re.split(r"[。；;.\n]+", text)
@@ -275,6 +294,8 @@ def _assess_structural_complexity(text: str, domain_count: int) -> dict[str, Any
         reasons.append(f"many constraints ({constraint_count})")
     if multistep_count >= 2:
         reasons.append(f"multi-step ({multistep_count} steps)")
+    if _requires_theory_first_construction(text, matched or []):
+        reasons.append("constructive modular-form research task")
 
     return {
         "is_complex": len(reasons) >= 2,
@@ -324,17 +345,21 @@ def analyze_problem(problem: str, detected_objects: str = "") -> dict[str, Any]:
 
 
     scale = scale_info.get("scale", "unknown")
-    allow_bruteforce = scale in {"trivial", "moderate"}
+    theory_first = scale in {"heavy", "infeasible_brute_force"} or _requires_theory_first_construction(combined, matched)
+    allow_bruteforce = scale in {"trivial", "moderate"} and not theory_first
     suggested_invariants = _suggest_invariants(scale_info, matched)
     verification_checks = _suggest_verification_checks(matched)
     workflow = {
         "phases": ["theorem", "invariants", "verification"],
-        "theory_first": scale in {"heavy", "infeasible_brute_force"},
+        "theory_first": theory_first,
     }
 
     approach_parts = []
-    if workflow["theory_first"]:
-        approach_parts.append("直接计算不可行，必须先用理论降维")
+    if theory_first:
+        if scale in {"heavy", "infeasible_brute_force"}:
+            approach_parts.append("直接计算不可行，必须先用理论降维")
+        else:
+            approach_parts.append("这是构造/研究型模形式问题，应先给出理论构造与关键不变量，再做少量验证")
     elif scale == "moderate":
         approach_parts.append("可以计算，但应先检查是否能用定理或结构化简")
     else:
@@ -352,7 +377,7 @@ def analyze_problem(problem: str, detected_objects: str = "") -> dict[str, Any]:
             approach_parts.append(f"SageMath 提示：{top['sage_hint']}")
 
     unique_domains = sorted(set(domains))
-    structural_complexity = _assess_structural_complexity(combined, len(unique_domains))
+    structural_complexity = _assess_structural_complexity(combined, len(unique_domains), matched=matched)
 
     return {
         "title": "定理顾问",

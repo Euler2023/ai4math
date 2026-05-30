@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: ai4math
-Version: 0.1.0
+Version: 0.2.3
 Summary: LLM-powered mathematical tool-calling system for analysis, abstract algebra, and probability theory
 Requires-Python: >=3.12
 Requires-Dist: sympy>=1.13
@@ -8,3 +8,4 @@ Requires-Dist: openai>=1.30
 Requires-Dist: rich>=13.0
 Requires-Dist: pydantic>=2.0
 Requires-Dist: python-dotenv>=1.0
+Requires-Dist: matplotlib>=3.8

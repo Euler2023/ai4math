@@ -3,3 +3,4 @@ openai>=1.30
 rich>=13.0
 pydantic>=2.0
 python-dotenv>=1.0
+matplotlib>=3.8

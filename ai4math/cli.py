@@ -36,8 +36,14 @@ except ImportError:
 
 from ai4math.tools.registry import ToolRegistry
 from ai4math.llm.client import MathLLMClient
+from ai4math.cli_input import expand_at_paths, make_session, prompt_line
 
 console = Console()
+
+# prompt_toolkit session for the interactive REPL. Created lazily in
+# `_run_interactive` so non-interactive entry points (one-shot, batch, pipe)
+# don't pay the import + history-file cost.
+_session = None
 
 # Conversation history for Markdown export
 _conversation: list[dict[str, str]] = []  # [{"role": "user"/"assistant"/"tool", "content": "..."}]
@@ -186,7 +192,11 @@ def _read_multiline() -> str:
     empty_count = 0
     while True:
         try:
-            line = console.input("[bold green]  ... [/bold green]")
+            line = prompt_line(
+                _session,
+                "[bold green]  ... [/bold green]",
+                fallback=console.input,
+            )
         except (EOFError, KeyboardInterrupt):
             break
         if line.strip() == '"""':
@@ -467,7 +477,7 @@ def _run_batch(file_path: str, output_dir: str = "", workers: int = 1, timeout: 
 
 def _run_interactive():
     """Run interactive REPL."""
-    global _last_response
+    global _last_response, _session
 
     load_dotenv()
 
@@ -495,16 +505,31 @@ def _run_interactive():
         console.print(f"[dim]路由: 自动 (flash={client.flash_model}, pro={client.pro_model})[/dim]")
     console.print()
 
+    # Initialize prompt_toolkit session with @<path> + slash completion and a
+    # persistent history file. Falls back to console.input if unavailable.
+    history_dir = Path.home() / ".cache" / "ai4math"
+    try:
+        history_dir.mkdir(parents=True, exist_ok=True)
+        history_path: str | None = str(history_dir / "repl_history")
+    except OSError:
+        history_path = None
+    _session = make_session(history_file=history_path)
+
     console.print("[dim]输入数学问题开始对话。特殊命令：[/dim]")
     console.print('[dim]  \"\"\"     - 多行输入模式    /reset  - 重置对话[/dim]')
     console.print("[dim]  /tools  - 显示所有工具    /save   - 保存对话[/dim]")
     console.print("[dim]  /copy   - 复制最后回答    /last   - 显示原始 Markdown[/dim]")
     console.print("[dim]  /help   - 显示帮助        /quit   - 退出[/dim]")
+    console.print('[dim]  @<path> - Tab 补全文件路径，发送时会自动内联文件内容[/dim]')
     console.print()
 
     while True:
         try:
-            user_input = console.input("[bold green]You > [/bold green]").strip()
+            user_input = prompt_line(
+                _session,
+                "[bold green]You > [/bold green]",
+                fallback=console.input,
+            ).strip()
         except (EOFError, KeyboardInterrupt):
             console.print("\n[dim]再见！[/dim]")
             break
@@ -536,7 +561,11 @@ def _run_interactive():
                 lines = [rest]
                 while True:
                     try:
-                        line = console.input("[bold green]  ... [/bold green]")
+                        line = prompt_line(
+                            _session,
+                            "[bold green]  ... [/bold green]",
+                            fallback=console.input,
+                        )
                     except (EOFError, KeyboardInterrupt):
                         break
                     if line.strip().endswith('"""'):
@@ -658,7 +687,11 @@ def _run_interactive():
 
         # --- Send to LLM ---
         try:
-            _do_chat(client, user_input)
+            expanded, inlined = expand_at_paths(user_input)
+            if inlined:
+                for path in inlined:
+                    console.print(f"  [dim]📎 已内联文件:[/dim] [cyan]{path}[/cyan]")
+            _do_chat(client, expanded)
             console.print("[dim]提示: /copy 复制 Markdown | /save 保存对话 | /last 查看原始 Markdown[/dim]")
         except Exception as e:
             console.print(f"[bold red]错误:[/bold red] {e}")
@@ -702,12 +735,20 @@ def main():
     parser.add_argument("-t", "--temperature", type=float,
                         default=None,
                         help="控制输出随机性 (0=确定性, 1=创造性, 默认0)")
+    parser.add_argument("-n", "--max-iterations", type=int,
+                        default=None,
+                        help="工具调用最大轮数（默认 100）")
 
     args = parser.parse_args()
 
     # Apply temperature if specified via CLI
     if args.temperature is not None:
         os.environ["AI4MATH_TEMPERATURE"] = str(args.temperature)
+
+    if args.max_iterations is not None:
+        os.environ["AI4MATH_MAX_ITERATIONS"] = str(args.max_iterations)
+    else:
+        os.environ.setdefault("AI4MATH_MAX_ITERATIONS", "100")
 
     # --- Batch mode ---
     if args.batch:

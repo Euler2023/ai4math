@@ -152,6 +152,47 @@
       "confidence": "high",
       "sage_hint": "FORMULA (Folsom-Ono-Rhoades Theorem 1.1):\nFor zeta = primitive 2k-th root of unity (i.e. order of zeta is 2k):\nlim_{q->zeta}(f(q) - (-1)^k * b(q)) = -4*zeta - 4*sum_{n=1}^{k-1} prod_{j=1}^{n}(1+zeta^j)^2 * zeta^{n+1}\nwhere f(q) = F(z) is the mock theta function and b(q) = G(z) is the modular shadow.\nSince |b(q)| -> infinity exponentially, F/G -> (-1)^k and G/F -> (-1)^k, so F/G - G/F -> 0.\nTherefore alpha = lim(F - G + F/G - G/F) = lim(F - (-1)^k G) + 0.\nSageMath implementation:\nk = 4*ell_2; k_half = k // 2\nK.<z> = CyclotomicField(k)\nzeta = z^ell_1\nalpha = -4*zeta - 4*sum(prod((1+zeta^j)^2 for j in range(1,n+1)) * zeta^(n+1) for n in range(1, k_half))\nP = alpha.minpoly()\nK_alpha = NumberField(P, 'a')\nGal = K_alpha.galois_closure('b')\ndeg = Gal.degree()\nOmega = (P(ell_1) + P(ell_2))^(ell_2-1) / deg",
       "related": ["mock_theta_radial_limits", "eta_quotient_evaluation"]
+    },
+    {
+      "id": "harmonic_weak_maass_construction",
+      "name": "Construction of harmonic weak Maass forms and CM evaluations",
+      "name_zh": "调和弱 Maass 形式的构造与 CM 点取值",
+      "domains": ["modular_forms", "number_theory"],
+      "keywords": ["harmonic weak Maass", "weak Maass form", "Maass form", "holomorphic part", "CM point", "Hecke translate", "trace", "Catalan constant", "L(2,chi)", "Beukers", "irrationality", "调和弱 Maass", "构造"],
+      "signals": ["harmonic.*weak.*maass", "maass\\s+form", "holomorphic\\s+part", "CM\\s+point", "hecke.*translat", "trace.*to.*Q", "catalan.*constant", "L\\(2.*chi.*-4"],
+      "applicable_when": "构造 weight 0 harmonic weak Maass form 使其全纯部分在 CM 点取值涉及 Catalan 常数或其他 L-值，或研究 Hecke 平移后 trace 到 Q 的有理线性形式",
+      "reduces": "这是构造/研究型问题，不能靠工具枚举。应先确定候选构造（Poincaré series、Eisenstein family 导数/常数项、theta lift、regularized theta lift），再验证关键性质",
+      "prerequisites": ["target weight and level", "CM discriminant and point", "target L-value or period", "candidate construction method"],
+      "invariant_hints": [
+        "weight k=0 harmonic weak Maass form lives on Gamma_0(N) for suitable N",
+        "holomorphic part M^+(tau) has q-expansion with possible pole at cusp",
+        "at CM point tau_0=i (disc -4): M^+(i) = alpha + kappa*G where G=L(2,chi_{-4})",
+        "Hecke operator T_m acts on M; trace Tr_{K/Q} of M^+|T_m(tau_0) gives A_m*G + B_m",
+        "key: A_m, B_m rational, |A_m*G + B_m| exponentially small, denominator growth sub-Beukers"
+      ],
+      "verification_hints": [
+        "verify M satisfies Delta_0 M = 0 (weight 0 Laplacian)",
+        "verify holomorphic part has correct principal part at cusps",
+        "check M^+(i) numerically against alpha + kappa*G",
+        "verify A_m, B_m are rational for small m",
+        "compare denominator growth of B_m with Beukers-type lcm(1..n)^c"
+      ],
+      "preferred_recipe": [
+        "identify the target: weight 0, level N divisible by 4, character trivial or chi_{-4}",
+        "choose construction: Poincaré series P(0,m,0) or xi-preimage of weight 2 cusp form or Eisenstein derivative",
+        "write the theoretical framework FIRST: define M, verify harmonicity, compute M^+ expansion",
+        "use Sage only for: (a) verifying q-expansion coefficients, (b) numerical check at CM point, (c) computing A_m, B_m for small m",
+        "do NOT explore Sage blindly looking for a construction"
+      ],
+      "avoid_patterns": [
+        "do not call sage_eval repeatedly to explore modular form spaces without a specific construction target",
+        "do not try to numerically discover the Maass form by evaluating random modular objects at tau=i",
+        "do not spend tool calls on basic Sage API exploration (ModularForms, DirichletGroup, etc.)",
+        "do not attempt brute-force q-expansion matching"
+      ],
+      "confidence": "high",
+      "sage_hint": "THEORY-FIRST: This is a construction problem. Write the construction on paper first.\nCandidate constructions for weight 0 harmonic weak Maass forms:\n1. Poincaré series: M = P(0, m, 0; Gamma_0(N)) — has known Fourier expansion\n2. xi-preimage: if g is weight 2 cusp form, solve xi_0(M) = g; M^+ is the holomorphic part\n3. Eisenstein family: E(tau, s) at s=0 or derivative E'(tau, 0)\n4. Theta lift: regularized theta lift of a Schwartz function\nFor CM evaluation at tau=i:\n- Use Chowla-Selberg or Kronecker limit formula to relate M^+(i) to L-values\n- L(2, chi_{-4}) = Catalan's constant G = 0.9159655...\nSage verification (AFTER theoretical construction):\nfrom sage.modular.modform.constructor import ModularForms\n# verify q-expansion coefficients match your construction\n# numerical check: evaluate truncated q-expansion at q=exp(2*pi*I*i)=exp(-2*pi)",
+      "related": ["modular_forms_at_cusps", "eta_quotient_evaluation"]
     }
   ]
 }

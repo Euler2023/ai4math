@@ -337,6 +337,59 @@ class TestPreplanning(unittest.TestCase):
         self.assertIn("avoid_patterns", context)
         self.assertIn("count_points", context)
 
+    def test_constructive_maass_routes_complex(self):
+        """Harmonic weak Maass form construction must route to complex."""
+        prompt = (
+            "Construct a weight 0 harmonic weak Maass form M whose holomorphic part "
+            "satisfies M^+(i)=alpha+kappa*G where G=L(2,chi_{-4}) is Catalan's constant. "
+            "Then study whether Hecke translates traced to Q yield rational linear forms."
+        )
+        client = MathLLMClient(api_key="test-key", base_url="http://example.com")
+        difficulty = client._classify_difficulty(prompt)
+        self.assertEqual(difficulty, "complex")
+
+    def test_constructive_maass_theory_first_and_guidance(self):
+        """Constructive Maass problem gets theory_first workflow and high-confidence guidance."""
+        from ai4math.tools.theorem_advisor import analyze_problem
+
+        prompt = (
+            "Construct a weight 0 harmonic weak Maass form M whose holomorphic part "
+            "satisfies M^+(i)=alpha+kappa*G where G=L(2,chi_{-4}) is Catalan's constant. "
+            "Then study whether Hecke translates of M^+, evaluated at the CM point i "
+            "and traced to Q, yield rational linear forms A_m*G + B_m."
+        )
+        analysis = analyze_problem(prompt)
+        self.assertTrue(analysis["workflow"]["theory_first"])
+        self.assertFalse(analysis["allow_bruteforce"])
+        self.assertTrue(analysis["structural_complexity"]["is_complex"])
+        self.assertIn(
+            "constructive modular-form research task",
+            analysis["structural_complexity"]["reasons"],
+        )
+
+        matched_names = [t["theorem"] for t in analysis["suggested_theorems"]]
+        self.assertTrue(
+            any("harmonic" in name.lower() or "Maass" in name for name in matched_names),
+            f"Expected harmonic weak Maass theorem match, got: {matched_names}",
+        )
+
+        client = MathLLMClient(api_key="test-key", base_url="http://example.com")
+        plan = {
+            "problem_type": "constructive_modular_forms",
+            "should_use_theory_first": True,
+            "recommended_tools": ["theorem_advisor", "sage_eval"],
+            "key_invariants": ["weight", "level", "CM discriminant"],
+            "theorem_focus": ["harmonic weak Maass construction"],
+            "invariant_targets": ["weight", "level", "holomorphic part expansion"],
+            "verification_targets": ["harmonicity", "CM evaluation"],
+            "strategy": "theory-first construction",
+        }
+        context = client._build_preplan_context(analysis, plan)
+        self.assertIn("高置信度定理指导", context)
+        self.assertIn("preferred_recipe", context)
+        self.assertIn("avoid_patterns", context)
+        self.assertIn("禁止暴力枚举", context)
+
 
 if __name__ == "__main__":
     unittest.main()

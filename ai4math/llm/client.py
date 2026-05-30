@@ -181,11 +181,15 @@ _COMPLEX_ROUTING_PATTERNS = [
     r"class\s*number|判别式|整数环基",
     r"conductor|torsion|rank|j-?invariant",
     r"F_\{?\d+\^?\d{2,}\}?|\\mathbb\{F\}|GF\(\d+\^\d{2,}\)",
+    r"harmonic\s+weak\s+maass|weak\s+maass|maass\s+form|调和弱\s*maass",
+    r"cm\s+point|heegner|hecke\s+translate|trace(?:d)?\s+to\s*(?:q|\\mathbb\{q\})",
+    r"holomorphic\s+part|catalan(?:'s)?\s+constant|L\(\s*2\s*,\s*chi",
 ]
 
 _COMPLEX_ROUTING_HINTS = (
     "证明", "验证", "进一步", "并判断", "并求", "生成元", "扭子群",
     "点数", "hasse", "galois", "groebner", "mordell-weil",
+    "构造", "maass", "cm point", "hecke", "trace", "catalan",
 )
 
 
