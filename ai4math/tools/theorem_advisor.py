@@ -33,7 +33,7 @@ def _load_json_payload(payload: str) -> list[dict[str, Any]]:
 def _load_builtin_theorems() -> list[dict[str, Any]]:
     theorems_dir = resources.files("ai4math").joinpath("tools", "theorems")
     all_theorems: list[dict[str, Any]] = []
-    for item in theorems_dir.iterdir():
+    for item in sorted(theorems_dir.iterdir(), key=lambda p: p.name):
         if not item.name.endswith(".json"):
             continue
         try:

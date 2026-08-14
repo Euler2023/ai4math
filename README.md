@@ -157,15 +157,14 @@ ai4math/tools/theorems/
 ├── elliptic_curves.json
 ├── modular_forms.json
 ├── number_theory.json
-├── theorems.json
 └── _schema.md
 ```
 
 加载规则：
 - 系统会自动发现并合并 `tools/theorems/*.json`
-- `theorems.json` 保留为向后兼容的聚合入口
+- 每个 `id` 只存在于一个领域文件，跨文件不重复
 - 外部定理库仍可通过 `AI4MATH_THEOREM_EXTERNAL_PATH` / `AI4MATH_THEOREM_EXTERNAL_URL` 注入
-- 重复 `id` 的条目会自动去重
+- 外部库与内置库合并时按 `id` 去重（外部优先）
 
 ### 4. 启动
 
@@ -265,8 +264,7 @@ ai4math/
 │   │   │   ├── combinatorics.json
 │   │   │   ├── elliptic_curves.json
 │   │   │   ├── modular_forms.json
-│   │   │   ├── number_theory.json
-│   │   │   └── theorems.json    # 聚合入口（向后兼容）
+│   │   │   └── number_theory.json
 │   │   ├── sage_tools.py        # 高级数学工具 (SageMath)
 │   │   ├── sage_plotting.py     # 可视化工具 (SageMath)
 │   │   └── sage_subprocess.py   # SageMath 子进程隔离执行
@@ -294,7 +292,7 @@ ai4math/
 
 1. **工具注册系统** (`registry.py`): 通过 `@math_tool` 装饰器自动注册并生成 OpenAI function calling JSON Schema（支持 DeepSeek V4 strict 模式）
 2. **双计算引擎**: SymPy（轻量快速，进程内执行）+ SageMath（高级形式化运算，每次调用独立子进程隔离）
-3. **SageMath 子进程隔离** (`sage_subprocess.py`): 所有 SageMath 工具调用在独立子进程中执行，超时后硬杀整个进程组，避免 Maxima/ECL 等子进程残留。超时可通过 `AI4MATH_TOOL_TIMEOUT` 环境变量配置（默认 120s）
+3. **SageMath 子进程隔离** (`sage_subprocess.py`): 所有 SageMath 工具调用在独立子进程中执行，超时后硬杀整个进程组，避免 Maxima/ECL 等子进程残留。超时可通过 `AI4MATH_TOOL_TIMEOUT` 环境变量配置（默认 120s）。子进程会自动把 Sage 缓存目录 `DOT_SAGE` 指向可写位置（默认 `~/.sage` 不可写时回退到临时目录），避免容器/只读 HOME 环境下的 `Read-only file system` 报错
 4. **通用骨架** (`client.py` + `theorem_advisor.py`): 正式求解前先估计规模、匹配定理、导出中间不变量与 verification checks；对 `heavy` / `infeasible_brute_force` 题目强制要求先做 theorem -> invariants -> verification
 5. **领域插件** (`tools/theorems/*.json`): 定理库按领域拆分，系统自动发现、合并并支持外部覆盖
 6. **LLM 客户端** (`client.py`): 支持 OpenAI 兼容 API 的工具调用循环，DeepSeek V4 自动启用 thinking 推理模式
@@ -410,6 +408,12 @@ export AI4MATH_THEOREM_EXTERNAL_URL=https://example.com/theorems.json
 - 把 `theorem_advisor.py` 进一步拆成通用加载器、通用匹配器，以及按领域注册的 invariant extractor / verifier hooks，减少跨领域逻辑继续堆在单文件中的耦合
 
 ## 更新日志
+
+### v0.2.4 — 2026-05-28
+- **定理库去重**：移除冗余的聚合文件 `theorems.json`，每个定理 `id` 现只存在于一个领域文件中；`_load_builtin_theorems` 改为按文件名确定性排序加载
+- **Sage 缓存目录自适应**：SageMath 子进程会自动把 `DOT_SAGE` 指向可写位置，避免容器/只读 HOME 环境下的 `Read-only file system` 报错
+- **修复**：`ai4math.__version__` 与 `pyproject.toml` 版本号同步；`.env.example` 中 `AI4MATH_MAX_ITERATIONS` 默认值修正为 40；`galois_group_chebotarev` 次数上限与提示文案统一为 30
+- **新增测试**：`test_no_duplicate_ids_across_builtin_files`（跨文件无重复 id 校验）
 
 ### v0.2.3 — 2026-04-25
 - **有限域曲线点数稳定性**：为 `weil_zeta_curve` 和 `klein_quartic_automorphisms` 定理条目补充 `preferred_recipe`、`avoid_patterns` 和 `confidence: "high"`，使预规划阶段能注入高置信度指导（明确 `count_points(g)` → Newton 恒等式路线），避免模型在手动枚举/`rational_points()` 等低效路线上空转

@@ -240,6 +240,28 @@ class TestTheoremAdvisorExternal(unittest.TestCase):
         top = max(recipes, key=lambda sc: sc.get("score", 0))
         self.assertEqual(top["confidence"], "high")
 
+    def test_no_duplicate_ids_across_builtin_files(self):
+        """Each theorem id must live in exactly one domain JSON file."""
+        from importlib import resources
+
+        theorems_dir = resources.files("ai4math").joinpath("tools", "theorems")
+        id_to_files: dict[str, list[str]] = {}
+        total = 0
+        for item in sorted(theorems_dir.iterdir(), key=lambda p: p.name):
+            if not item.name.endswith(".json"):
+                continue
+            payload = item.read_text(encoding="utf-8")
+            for entry in theorem_advisor._load_json_payload(payload):
+                total += 1
+                key = entry.get("id") or entry.get("name")
+                id_to_files.setdefault(key, []).append(item.name)
+
+        duplicates = {i: fs for i, fs in id_to_files.items() if len(fs) > 1}
+        self.assertEqual(duplicates, {}, f"duplicate theorem ids across files: {duplicates}")
+        self.assertGreaterEqual(total, 24)
+        self.assertIn("weil_zeta_curve", id_to_files)
+        self.assertIn("congruent_number_tunnell", id_to_files)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -294,7 +294,7 @@ def galois_group_chebotarev(poly: str, max_primes: int = 10000) -> str:
         return _result("表达式错误", error=str(e))
 
     degree = f.degree()
-    if degree > 40:
+    if degree > 30:
         return _result("暂不支持", error="目前实现仅支持较低次数多项式（建议 degree <= 30）的传递群枚举，因为群数量增长过快。")
 
     Zx = sa.PolynomialRing(sa.ZZ, 't')

@@ -45,7 +45,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Theorem advisor and domain plugins
 - The theorem knowledge base lives under `ai4math/tools/theorems/`.
-- Builtin theorem data is split into multiple domain JSON files (for example algebraic geometry, number theory, combinatorics, elliptic curves). `theorems.json` remains as a backward-compatible aggregate.
+- Builtin theorem data is split into multiple domain JSON files (for example algebraic geometry, number theory, combinatorics, elliptic curves). Each theorem `id` lives in exactly one file; there is no aggregate `theorems.json`.
 - `ai4math/tools/theorem_advisor.py` auto-discovers and merges `tools/theorems/*.json`, then optionally merges an external theorem file or URL based on environment variables.
 - Each theorem entry can contribute:
   - matching signals (`keywords`, `signals`)

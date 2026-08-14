@@ -7,7 +7,31 @@ import os
 import signal
 import subprocess
 import sys
+import tempfile
 from typing import Any
+
+
+def _child_env() -> dict[str, str]:
+    """Return the subprocess environment, guaranteeing a writable Sage cache dir.
+
+    SageMath writes its cache to ``DOT_SAGE`` (or ``~/.sage`` by default). In
+    containers / sandboxes / read-only homes this default is not writable, which
+    makes every Sage tool fail with ``[Errno 30] Read-only file system``. If the
+    configured location is missing or not writable, fall back to a temp dir.
+    """
+    env = os.environ.copy()
+    dot_sage = env.get("DOT_SAGE") or os.path.join(os.path.expanduser("~"), ".sage")
+    try:
+        os.makedirs(dot_sage, exist_ok=True)
+        if os.access(dot_sage, os.W_OK):
+            return env
+    except OSError:
+        pass
+
+    fallback = os.path.join(tempfile.gettempdir(), "ai4math_dot_sage")
+    os.makedirs(fallback, exist_ok=True)
+    env["DOT_SAGE"] = fallback
+    return env
 
 
 def run_sage_tool_subprocess(name: str, arguments: dict[str, Any], timeout: int, cwd: str) -> str:
@@ -23,6 +47,7 @@ def run_sage_tool_subprocess(name: str, arguments: dict[str, Any], timeout: int,
         text=True,
         cwd=cwd,
         start_new_session=True,
+        env=_child_env(),
     )
     try:
         stdout, stderr = proc.communicate(payload, timeout=timeout)
