@@ -172,12 +172,28 @@ def _call_tool_in_process(name: str, arguments: dict[str, Any], timeout: int) ->
 
     if t.is_alive():
         return json.dumps(
-            {"error": f"工具 {name} 执行超时 ({timeout}s)，已终止"},
+            {
+                "error": (
+                    f"工具 {name} 执行超时 ({timeout}s)，已停止等待结果"
+                    "（后台计算线程尚未结束；可设置 AI4MATH_SUBPROCESS_CATEGORIES=all 启用子进程硬超时隔离）"
+                )
+            },
             ensure_ascii=False,
         )
     if error_box:
         return json.dumps({"error": str(error_box[0])}, ensure_ascii=False)
     return result_box[0] if result_box else json.dumps({"error": "no result"}, ensure_ascii=False)
+
+
+def _should_run_in_subprocess(category: str) -> bool:
+    raw = os.environ.get("AI4MATH_SUBPROCESS_CATEGORIES", "sage").strip()
+    if not raw:
+        return category.startswith("sage")
+    tokens = [tok.strip().lower() for tok in raw.split(",") if tok.strip()]
+    if "all" in tokens or "*" in tokens:
+        return True
+    cat_low = category.lower()
+    return any(cat_low == tok or cat_low.startswith(tok) for tok in tokens)
 
 
 def _call_tool_in_subprocess(name: str, arguments: dict[str, Any], timeout: int) -> str:
@@ -190,9 +206,15 @@ class ToolRegistry:
     """Central registry for all math tools."""
 
     @staticmethod
-    def get_all_schemas() -> list[dict]:
-        """Get OpenAI-format tool schemas for all registered tools."""
-        return [entry["schema"] for entry in _REGISTRY.values()]
+    def get_all_schemas(exclude_categories: set[str] | None = None) -> list[dict]:
+        """Get OpenAI-format tool schemas for registered tools."""
+        if not exclude_categories:
+            return [entry["schema"] for entry in _REGISTRY.values()]
+        return [
+            entry["schema"]
+            for entry in _REGISTRY.values()
+            if entry["category"] not in exclude_categories
+        ]
 
     @staticmethod
     def get_schemas_by_category(category: str) -> list[dict]:
@@ -211,7 +233,7 @@ class ToolRegistry:
 
         deadline = timeout if timeout is not None else TOOL_TIMEOUT
         entry = _REGISTRY[name]
-        if entry["category"].startswith("sage"):
+        if _should_run_in_subprocess(entry["category"]):
             return _call_tool_in_subprocess(name, arguments, deadline)
         return _call_tool_in_process(name, arguments, deadline)
 

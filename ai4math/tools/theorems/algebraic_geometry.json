@@ -10,15 +10,15 @@
         "finite_fields"
       ],
       "keywords": [
-        "curve",
+        "projective curve",
         "finite field",
         "point count",
-        "zeta",
-        "曲线",
+        "weil zeta",
         "有限域",
+        "曲线点数",
         "点数",
         "nonzero points",
-        "projective"
+        "projective points"
       ],
       "signals": [
         "\\\\mathbb\\{F\\}",

@@ -4,55 +4,32 @@ from __future__ import annotations
 
 import json
 import sympy as sp
-from sympy.parsing.sympy_parser import (
-    parse_expr,
-    standard_transformations,
-    implicit_multiplication_application,
-    convert_xor,
-)
 
+from ai4math.tools._shared import (
+    format_result,
+    get_or_make_symbol,
+    make_local_dict,
+    safe_literal_eval,
+    safe_parse_expr,
+    split_top_level,
+)
 from ai4math.tools.registry import math_tool
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-_TRANSFORMATIONS = standard_transformations + (
-    implicit_multiplication_application,
-    convert_xor,
-)
-
-# Common symbol names pre-defined for convenience
-_LOCAL_DICT: dict = {}
-for _name in "x y z t a b c n m k alpha beta gamma theta phi psi omega lambda mu sigma rho tau epsilon delta".split():
-    _LOCAL_DICT[_name] = sp.Symbol(_name)
-# Also add common constants
-_LOCAL_DICT["pi"] = sp.pi
-_LOCAL_DICT["e"] = sp.E
-_LOCAL_DICT["I"] = sp.I
-_LOCAL_DICT["oo"] = sp.oo
-_LOCAL_DICT["inf"] = sp.oo
+_LOCAL_DICT = make_local_dict()
 
 
-def _parse(expr_str: str) -> sp.Expr:
-    """Parse a string expression into a SymPy expression."""
-    return parse_expr(expr_str, local_dict=_LOCAL_DICT, transformations=_TRANSFORMATIONS)
+def _parse(expr_str: str, extra_locals: dict | None = None) -> sp.Expr:
+    """Safely parse a string expression into a SymPy expression."""
+    return safe_parse_expr(expr_str, local_dict=_LOCAL_DICT, extra_locals=extra_locals)
 
 
 def _sym(name: str) -> sp.Symbol:
     """Get or create a SymPy symbol."""
-    if name in _LOCAL_DICT and isinstance(_LOCAL_DICT[name], sp.Symbol):
-        return _LOCAL_DICT[name]
-    return sp.Symbol(name)
+    return get_or_make_symbol(name, _LOCAL_DICT)
 
 
 def _result(title: str, **kwargs) -> str:
-    """Format a result dict as a JSON string."""
-    out = {"title": title}
-    for k, v in kwargs.items():
-        out[k] = str(v)
-    out["_display_instruction"] = "你必须在回复中用 $$ LaTeX $$ 展示此工具返回的 latex 字段内容，不得省略"
-    return json.dumps(out, ensure_ascii=False)
+    return format_result(title, **kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -104,8 +81,8 @@ def differentiate(expr: str, variable: str = "x", order: int = 1) -> str:
         variable: 求导变量，默认为 'x'
         order: 求导阶数，默认为 1
     """
-    e = _parse(expr)
     var = _sym(variable)
+    e = _parse(expr, extra_locals={variable: var})
     result = sp.diff(e, var, order)
     simplified = sp.simplify(result)
     return _result(
@@ -126,10 +103,15 @@ def integrate(expr: str, variable: str = "x", lower: str = "", upper: str = "") 
         lower: 定积分下限（留空表示不定积分），例如 '0'
         upper: 定积分上限（留空表示不定积分），例如 'oo'
     """
-    e = _parse(expr)
-    var = _sym(variable)
+    has_lo = bool(lower.strip())
+    has_hi = bool(upper.strip())
+    if has_lo != has_hi:
+        return _result("错误", error="定积分必须同时提供下限 lower 和上限 upper；不定积分请将两者均留空")
 
-    if lower and upper:
+    var = _sym(variable)
+    e = _parse(expr, extra_locals={variable: var})
+
+    if has_lo and has_hi:
         lo = _parse(lower)
         hi = _parse(upper)
         result = sp.integrate(e, (var, lo, hi))
@@ -152,8 +134,8 @@ def compute_limit(expr: str, variable: str = "x", point: str = "0", direction: s
         point: 趋近的点，例如 '0', 'oo', '-oo'
         direction: 趋近方向，'+' 右极限, '-' 左极限, '' 双侧（默认）
     """
-    e = _parse(expr)
     var = _sym(variable)
+    e = _parse(expr, extra_locals={variable: var})
     pt = _parse(point)
 
     kwargs = {}
@@ -180,8 +162,8 @@ def series_expansion(expr: str, variable: str = "x", point: str = "0", order: in
         point: 展开点，默认为 '0'（麦克劳林级数）
         order: 展开阶数，默认为 6
     """
-    e = _parse(expr)
     var = _sym(variable)
+    e = _parse(expr, extra_locals={variable: var})
     pt = _parse(point)
     result = sp.series(e, var, pt, n=order)
     return _result(
@@ -200,31 +182,42 @@ def solve_equation(equations: str, variables: str = "") -> str:
         equations: 方程（用逗号分隔多个方程），例如 'x**2 - 3*x + 2' 或 'x + y - 1, x - y - 3'
         variables: 求解的变量（逗号分隔），例如 'x' 或 'x,y'，留空自动检测
     """
-    eq_strs = [s.strip() for s in equations.split(",")]
+    eq_strs = split_top_level(equations, ",")
     eqs = []
     for eq_str in eq_strs:
-        if "=" in eq_str:
+        if "=" in eq_str and "==" not in eq_str and "<=" not in eq_str and ">=" not in eq_str and "!=" not in eq_str:
             lhs, rhs = eq_str.split("=", 1)
             eqs.append(sp.Eq(_parse(lhs.strip()), _parse(rhs.strip())))
         else:
             eqs.append(_parse(eq_str))
 
-    if variables:
-        vars_ = [_sym(v.strip()) for v in variables.split(",")]
+    if variables.strip():
+        vars_ = [_sym(v.strip()) for v in split_top_level(variables, ",")]
     else:
-        vars_ = list(set().union(*(eq.free_symbols if hasattr(eq, 'free_symbols') else set() for eq in eqs)))
+        vars_ = list(set().union(*(eq.free_symbols if hasattr(eq, "free_symbols") else set() for eq in eqs)))
         vars_.sort(key=str)
+
+    if not vars_:
+        return _result("错误", error="未检测到可求解的变量")
 
     result = sp.solve(eqs if len(eqs) > 1 else eqs[0], vars_ if len(vars_) > 1 else vars_[0])
 
     if isinstance(result, list):
         solutions = [str(r) for r in result]
+        latex_str = sp.latex(result)
     elif isinstance(result, dict):
         solutions = {str(k): str(v) for k, v in result.items()}
+        latex_str = r",\; ".join(f"{sp.latex(k)} = {sp.latex(v)}" for k, v in result.items())
     else:
         solutions = str(result)
+        latex_str = sp.latex(result)
 
-    return _result("方程求解", equations=equations, solutions=json.dumps(solutions, ensure_ascii=False, default=str))
+    return _result(
+        "方程求解",
+        equations=equations,
+        solutions=json.dumps(solutions, ensure_ascii=False, default=str),
+        latex=latex_str,
+    )
 
 
 @math_tool(category="analysis", description="求解常微分方程 (ODE)")
@@ -237,12 +230,9 @@ def solve_ode(ode: str, func: str = "f(x)", variable: str = "x") -> str:
         variable: 自变量，默认为 'x'
     """
     var = _sym(variable)
-    # Create the function
     func_name = func.split("(")[0].strip()
     F = sp.Function(func_name)
-    local = {**_LOCAL_DICT, func_name: F, variable: var}
-
-    ode_expr = parse_expr(ode, local_dict=local, transformations=_TRANSFORMATIONS)
+    ode_expr = _parse(ode, extra_locals={func_name: F, variable: var})
     f_var = F(var)
     result = sp.dsolve(ode_expr, f_var)
     return _result(
@@ -254,17 +244,17 @@ def solve_ode(ode: str, func: str = "f(x)", variable: str = "x") -> str:
 
 
 @math_tool(category="analysis", description="计算求和（有限或无穷级数求和）")
-def compute_sum(expr: str, variable: str = "n", lower: str = "0", upper: str = "oo") -> str:
+def compute_sum(expr: str, variable: str = "n", lower: str = "1", upper: str = "oo") -> str:
     """计算级数求和。
 
     Args:
         expr: 通项表达式，例如 '1/n**2'
         variable: 求和变量，默认为 'n'
-        lower: 下界，默认为 '0'
+        lower: 下界，默认为 '1'（如从 0 开始请显式传 '0'）
         upper: 上界，默认为 'oo'（无穷）
     """
-    e = _parse(expr)
     var = _sym(variable)
+    e = _parse(expr, extra_locals={variable: var})
     lo = _parse(lower)
     hi = _parse(upper)
     result = sp.summation(e, (var, lo, hi))
@@ -283,10 +273,9 @@ def matrix_operation(matrix: str, operation: str = "det") -> str:
 
     Args:
         matrix: 矩阵，用嵌套列表表示，例如 '[[1,2],[3,4]]'
-        operation: 运算类型: det(行列式), inv(逆), eigenvals(特征值), eigenvects(特征向量), rank(秩), rref(行最简形式)
+        operation: 运算类型: det(行列式), inv(逆), eigenvals(特征值), eigenvects(特征向量), rank(秩), rref(行最简形式), transpose(转置)
     """
-    import ast
-    data = ast.literal_eval(matrix)
+    data = safe_literal_eval(matrix)
     M = sp.Matrix(data)
 
     ops = {
@@ -303,12 +292,34 @@ def matrix_operation(matrix: str, operation: str = "det") -> str:
         return _result("错误", error=f"未知运算: {operation}，支持: {', '.join(ops.keys())}")
 
     result = ops[operation]()
+    if operation == "eigenvals" and isinstance(result, dict):
+        latex_str = r",\; ".join(
+            f"\\lambda = {sp.latex(val)}\\text{{ (重数 {mult})}}" for val, mult in result.items()
+        )
+        out_str = ", ".join(f"{val} (mult={mult})" for val, mult in result.items())
+    elif operation == "eigenvects" and isinstance(result, list):
+        parts_ltx = []
+        parts_txt = []
+        for val, mult, vecs in result:
+            vec_ltx = ", ".join(sp.latex(v) for v in vecs)
+            parts_ltx.append(f"\\lambda = {sp.latex(val)} \\text{{ (重数 {mult})}}: \\left[{vec_ltx}\\right]")
+            parts_txt.append(f"lambda={val} (mult={mult}): {[v.tolist() for v in vecs]}")
+        latex_str = r";\; ".join(parts_ltx)
+        out_str = "; ".join(parts_txt)
+    elif operation == "rref" and isinstance(result, tuple):
+        rref_mat, pivots = result
+        latex_str = f"{sp.latex(rref_mat)},\\quad \\text{{主元列}} = {list(pivots)}"
+        out_str = f"{sp.pretty(rref_mat)}\npivots: {list(pivots)}"
+    else:
+        latex_str = sp.latex(result)
+        out_str = sp.pretty(result)
+
     return _result(
         f"矩阵{operation}运算",
         matrix=matrix,
         operation=operation,
-        output=sp.pretty(result) if hasattr(result, '__class__') else str(result),
-        latex=sp.latex(result) if hasattr(result, 'atoms') else str(result),
+        output=out_str,
+        latex=latex_str,
     )
 
 
@@ -332,40 +343,38 @@ def step_by_step_simplify(expr: str) -> str:
         expr: 要化简的表达式
     """
     e = _parse(expr)
-    steps = []
-    steps.append(("原始表达式", e))
+    steps = [("原始表达式", e)]
 
-    # Step 1: Expand
     expanded = sp.expand(e)
     if expanded != e:
         steps.append(("展开", expanded))
 
-    # Step 2: Trig simplify
     trig = sp.trigsimp(expanded)
     if trig != expanded:
         steps.append(("三角化简", trig))
 
-    # Step 3: Factor
     current = steps[-1][1]
     factored = sp.factor(current)
     if factored != current:
         steps.append(("因式分解", factored))
 
-    # Step 4: General simplify
     current = steps[-1][1]
     simplified = sp.simplify(current)
     if simplified != current:
         steps.append(("化简", simplified))
 
-    # Step 5: Cancel
     current = steps[-1][1]
     cancelled = sp.cancel(current)
     if cancelled != current:
         steps.append(("约分", cancelled))
 
-    result = {}
+    result: dict[str, str] = {"title": "逐步化简"}
+    step_lines = []
     for i, (step_name, step_expr) in enumerate(steps):
         result[f"step_{i}"] = f"[{step_name}] {sp.pretty(step_expr)}"
+        step_lines.append(f"{i}. [{step_name}]: ${sp.latex(step_expr)}$")
+    result["steps_summary"] = "\n".join(step_lines)
     result["latex_final"] = sp.latex(steps[-1][1])
+    result["latex"] = sp.latex(steps[-1][1])
 
     return json.dumps(result, ensure_ascii=False)

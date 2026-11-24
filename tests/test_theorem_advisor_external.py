@@ -58,6 +58,19 @@ class TestTheoremAdvisorExternal(unittest.TestCase):
             ids = [thm.get("id") for thm in theorems]
             self.assertIn("new_external_theorem", ids)
             self.assertEqual(ids.count("weil_zeta_curve"), 1)
+            merged_weil = next(thm for thm in theorems if thm.get("id") == "weil_zeta_curve")
+            self.assertIn("override", merged_weil.get("keywords", []))
+            self.assertEqual(merged_weil.get("_source"), "external")
+
+    def test_external_url_rejects_file_and_insecure_http_schemes(self):
+        with self.assertRaises(ValueError):
+            theorem_advisor._validate_external_url("file:///etc/passwd")
+        with patch.dict(os.environ, {"AI4MATH_ALLOW_INSECURE_THEOREM_URL": "false"}, clear=False):
+            with self.assertRaises(ValueError):
+                theorem_advisor._validate_external_url("http://example.com/theorems.json")
+        # https:// and localhost http:// are permitted
+        theorem_advisor._validate_external_url("https://example.com/theorems.json")
+        theorem_advisor._validate_external_url("http://127.0.0.1:8080/theorems.json")
 
     def test_external_path_fallback_to_builtin_when_invalid(self):
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False) as f:

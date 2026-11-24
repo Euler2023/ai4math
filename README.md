@@ -245,12 +245,14 @@ You > """
 
 ```
 ai4math/
+├── .github/workflows/ci.yml     # GitHub Actions 自动化单测流水线
 ├── ai4math/
 │   ├── __init__.py
-│   ├── cli.py                   # 交互式 CLI
+│   ├── cli.py                   # 交互式 CLI 与多进程批处理
 │   ├── tools/
 │   │   ├── __init__.py
-│   │   ├── registry.py          # 工具注册与 Schema 生成
+│   │   ├── _shared.py           # 安全 SymPy 解析、AST 白名单、公共格式化与切分辅助
+│   │   ├── registry.py          # 工具注册、Schema 生成与执行调度
 │   │   ├── analysis.py          # 数学分析工具 (SymPy)
 │   │   ├── algebra.py           # 抽象代数工具 (SymPy)
 │   │   ├── probability.py       # 概率论工具 (SymPy)
@@ -265,16 +267,35 @@ ai4math/
 │   │   │   ├── elliptic_curves.json
 │   │   │   ├── modular_forms.json
 │   │   │   └── number_theory.json
-│   │   ├── sage_tools.py        # 高级数学工具 (SageMath)
+│   │   ├── sage_tools.py        # 高级数学与证明辅助工具 (SageMath)
 │   │   ├── sage_plotting.py     # 可视化工具 (SageMath)
-│   │   └── sage_subprocess.py   # SageMath 子进程隔离执行
+│   │   └── sage_subprocess.py   # 子进程隔离、敏感环境变量剥离与缓存隔离
 │   └── llm/
 │       ├── __init__.py
 │       └── client.py            # LLM 客户端 + 预规划阶段
+├── scripts/
+│   ├── eval_solutions.py        # 参考答案与工具基准核验脚本
+│   ├── galois_group_deg22.sage  # 22 次多项式 Galois 群实验脚本
+│   └── verify_M22.sage          # Mathieu 群 M_22 统计验证脚本
+├── tests/
+│   ├── test_preplanning.py
+│   ├── test_sage_subprocess.py
+│   ├── test_theorem_advisor_external.py
+│   ├── test_tools_regression.py # 工具全量冒烟、安全与回归测试
+│   └── *.md                     # 批处理题集与高难度参考解答
 ├── pyproject.toml
 ├── .env.example
 └── README.md
 ```
+
+## 安全说明
+
+- **代码执行边界**：`sage_eval`、`verify_conjecture`、`search_counterexample`、`explore_structure`、`construct_proof` 等工具会在本地子进程中以当前操作系统用户权限执行模型生成的 SageMath/Python 代码（非 OS 级容器沙箱）。**请勿直接用本工具处理不可信来源的题目文件（`-f` / `-b`）或加载不可信的外部定理库（`AI4MATH_THEOREM_EXTERNAL_URL` / `PATH`）**，以免触发间接提示词注入执行恶意指令。
+- **内置防护措施**：
+  - **凭证剥离**：Sage 工具子进程启动前会自动剥离 `OPENAI_API_KEY`、`OPENAI_BASE_URL` 及各类 `*_API_KEY` / `*_SECRET` / `*_TOKEN` 环境变量，防止密钥经工具返回泄漏。
+  - **SymPy AST 白名单**：主进程内 SymPy 表达式解析采用无内置函数全局字典 + AST 语法树校验，拦截内部属性访问（`__class__` 等）与任意函数调用。
+  - **多用户缓存隔离**：`DOT_SAGE` 回退目录按用户 UID 创建并强制 `0700` 权限与归属校验，避免共享 `/tmp` 目录冲突与 `init.sage` 投毒。
+  - **外部定理库校验**：外部 URL 默认仅允许 `https://` 且限制最大响应体积（2 MiB）；本地 `.env` 文件建议设置 `chmod 600 .env`。
 
 ## 架构设计
 
@@ -408,6 +429,24 @@ export AI4MATH_THEOREM_EXTERNAL_URL=https://example.com/theorems.json
 - 把 `theorem_advisor.py` 进一步拆成通用加载器、通用匹配器，以及按领域注册的 invariant extractor / verifier hooks，减少跨领域逻辑继续堆在单文件中的耦合
 
 ## 更新日志
+
+### v0.2.5 — 2026-11-24
+- **安全加固**：
+  - 子进程自动剥离 `OPENAI_API_KEY` 等敏感环境变量，防止密钥随代码执行结果外泄
+  - 新增 `ai4math/tools/_shared.py` 安全表达式解析器（清空 `__builtins__` + AST 节点与私有属性白名单校验），阻断进程内 `SymPy.parse_expr` 注入风险
+  - `DOT_SAGE` 临时缓存回退改为按用户 UID 隔离的 `0700` 目录并校验归属与非符号链接，防止共享服务器缓存冲突与 `init.sage` 投毒
+  - 外部定理库 URL 强制 `https://` 协议校验与 2 MiB 响应大小上限；收紧本地 `.env` 权限至 `0600`；多项式商环幂运算改为快速模幂避免内存爆炸
+- **Sage 执行器与证明工具重写**：
+  - `sage_eval` 与 `construct_proof` 统一改用整块 `sa.preparse` + AST 编译 + `stdout` 重定向捕获，完整支持 `^` 幂、`1/3` 精确有理数、`R.<x>=QQ[]`、多行 `for`/`if`/`def` 缩进块及 `print` 输出，并在子进程入口层隔离 `stdout` 确保 JSON 协议稳定
+  - 修复 `explore_structure` 四个主题的参数切分、Sage `preparse` 与 `Integer` JSON 序列化失败；修复 `search_counterexample` / `verify_conjecture` 吞异常误判通过的问题；修复 `sage_simplify` 对 `gamma` 比值的化简及 `galois_group` 的 LaTeX 输出
+- **SymPy / 绘图工具正确性修复**：
+  - 修复 `plot_inequality_region` 在 NumPy 2.x 下的 `np.lt` 崩溃；绘图范围支持 `-2*pi` 等符号常数，`plot_function` 支持 `min(x,0)` 顶层逗号切分与 `gamma(x)` 绘制；绘图文件名加入微秒与进程号避免并发碰撞
+  - 修复 `permutation_operation` 循环记法解析与 `power` 运算、`check_algebraic_structure` 非下标元素映射、`polynomial_operation` 有限域求根与 LCM、`compute_variance` 二进制浮点精度污染、`compute_probability` 双侧区间/绝对值/逻辑与或条件及 Poisson 矩母函数闭式求和；`integrate` / `sage_integrate` 拦截单侧缺失积分限
+- **预规划、客户端与 CLI 稳定性**：
+  - 修复高置信度定理在低分泛化词（如 `lim`、`rank`）上的误注入、普通整数幂（如 `2^127 - 1`）被误判为有限域、外部定理 `merge` 模式去重优先级反转问题
+  - 修复 `AI4MATH_MODEL` 在 `auto_route` 下不生效、截断响应（`finish_reason="length"`）破坏 `tool_calls` 协议、多轮对话预规划消息累积、工具结果在最终 Markdown 中丢失、交互模式 `Ctrl-C` 崩溃与 `/save` 路径转小写问题；按需裁剪非画图请求中的绘图工具 Schema
+  - 重写 `_run_batch` 进程槽位调度，使 `--timeout` 单题硬超时真正生效，修复 Frontmatter 切分与子目录图片相对链接
+- **测试与 CI**：新增 `tests/test_tools_regression.py`、`scripts/eval_solutions.py` 及 `.github/workflows/ci.yml`；修复 `_HAS_SAGE` 检测使无 Sage 环境下测试可正常跳过
 
 ### v0.2.4 — 2026-05-28
 - **定理库去重**：移除冗余的聚合文件 `theorems.json`，每个定理 `id` 现只存在于一个领域文件中；`_load_builtin_theorems` 改为按文件名确定性排序加载

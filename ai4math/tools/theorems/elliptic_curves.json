@@ -34,7 +34,7 @@
       "name": "Congruent number problem and Tunnell's theorem",
       "name_zh": "同余数问题与 Tunnell 定理",
       "domains": ["elliptic_curves", "number_theory"],
-      "keywords": ["congruent number", "Tunnell", "同余数", "rank", "Y^2=X^3-n^2X", "right triangle"],
+      "keywords": ["congruent number", "Tunnell", "同余数", "congruent curve", "Y^2=X^3-n^2X", "right triangle"],
       "signals": ["Y\\^2.*=.*X\\^3.*-.*\\^2.*X", "X\\^3.*-.*n\\^2.*X", "X\\^3.*-.*ell.*\\^2.*X", "X\\^3.*-.*l_1\\^2.*X", "\\\\mathbb.*Z/2.*Z/2", "congruent.*number"],
       "applicable_when": "判断椭圆曲线 Y^2 = X^3 - n^2 X 的秩是否为 0（等价于 n 是否为同余数）",
       "reduces": "Y^2 = X^3 - n^2 X 是同余数椭圆曲线。n 是同余数当且仅当该曲线的秩 > 0。对该曲线，torsion 自动为 Z/2Z × Z/2Z。因此 E(Q) = Z/2Z × Z/2Z 等价于 rank = 0 等价于 n 不是同余数。对素数 p：p ≡ 5, 6, 7 (mod 8) 时 p 是同余数（rank ≥ 1）；p ≡ 3 (mod 8) 时 p 不是同余数（rank = 0）；p ≡ 1 (mod 8) 时需要进一步判定（Tunnell 定理或直接算 rank）。特别地，对满足 p ≡ 3 (mod 4) 的素数，条件 p ≡ 3 (mod 8) 等价于 rank = 0。",

@@ -13,11 +13,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Save output to file: `ai4math -o result.md "问题"`
 
 ### Tests
-- Run all currently maintained unit tests for planning / theorem loading: `python -m unittest tests.test_theorem_advisor_external tests.test_preplanning`
+- Run full test suite: `python -m unittest tests.test_theorem_advisor_external tests.test_preplanning tests.test_sage_subprocess tests.test_tools_regression`
 - Run only preplanning tests: `python -m unittest tests.test_preplanning`
 - Run only theorem-advisor tests: `python -m unittest tests.test_theorem_advisor_external`
 - Run a single unittest case: `python -m unittest tests.test_preplanning.TestPreplanning.test_heavy_scale_forces_theory_first_constraint`
 - Run Sage subprocess tests: `python -m unittest tests.test_sage_subprocess`
+- Run tool regression & security tests: `python -m unittest tests.test_tools_regression`
+- Run offline reference solution verifier: `python scripts/eval_solutions.py`
 
 ## High-level architecture
 

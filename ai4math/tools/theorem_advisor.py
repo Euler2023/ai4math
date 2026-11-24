@@ -6,20 +6,24 @@ import json
 import os
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 from importlib import resources
 from typing import Any
 
 from ai4math.tools.registry import math_tool
 
-_THEOREMS_CACHE: dict[tuple[str, str, str, int], list[dict[str, Any]]] = {}
+MAX_EXTERNAL_THEOREM_BYTES = 2 * 1024 * 1024  # 2 MiB cap
+MAX_PROBLEM_MATCH_CHARS = 20_000
+
+_THEOREMS_CACHE: dict[tuple[str, str, str, int, str], list[dict[str, Any]]] = {}
 
 
 def _reset_theorem_cache() -> None:
     _THEOREMS_CACHE.clear()
 
 
-def _load_json_payload(payload: str) -> list[dict[str, Any]]:
+def _load_json_payload(payload: str, source: str = "builtin") -> list[dict[str, Any]]:
     data = json.loads(payload)
     if isinstance(data, dict):
         entries = data.get("theorems", [])
@@ -27,7 +31,13 @@ def _load_json_payload(payload: str) -> list[dict[str, Any]]:
         entries = data
     else:
         entries = []
-    return [entry for entry in entries if isinstance(entry, dict) and (entry.get("id") or entry.get("name"))]
+    loaded: list[dict[str, Any]] = []
+    for entry in entries:
+        if isinstance(entry, dict) and (entry.get("id") or entry.get("name")):
+            item = dict(entry)
+            item["_source"] = source
+            loaded.append(item)
+    return loaded
 
 
 def _load_builtin_theorems() -> list[dict[str, Any]]:
@@ -38,20 +48,39 @@ def _load_builtin_theorems() -> list[dict[str, Any]]:
             continue
         try:
             payload = item.read_text(encoding="utf-8")
-            all_theorems.extend(_load_json_payload(payload))
+            all_theorems.extend(_load_json_payload(payload, source="builtin"))
         except (OSError, json.JSONDecodeError, ValueError):
             continue
     return _dedupe_theorems(all_theorems)
 
 
+def _validate_external_url(url: str) -> None:
+    parsed = urllib.parse.urlparse(url)
+    scheme = (parsed.scheme or "").lower()
+    host = (parsed.hostname or "").lower()
+    allow_insecure = os.getenv("AI4MATH_ALLOW_INSECURE_THEOREM_URL", "false").strip().lower() in ("true", "1", "yes")
+    if scheme == "https":
+        return
+    if scheme == "http" and (allow_insecure or host in {"localhost", "127.0.0.1", "::1"}):
+        return
+    raise ValueError(f"Unsupported or insecure external theorem URL scheme: {scheme!r} (only https:// is permitted)")
+
+
 def _load_external_theorems(path: str, url: str, timeout: int) -> list[dict[str, Any]]:
     if path:
+        st = os.stat(path)
+        if st.st_size > MAX_EXTERNAL_THEOREM_BYTES:
+            raise ValueError("External theorem file exceeds maximum allowed size")
         with open(path, encoding="utf-8") as f:
-            return _load_json_payload(f.read())
+            return _load_json_payload(f.read(MAX_EXTERNAL_THEOREM_BYTES + 1), source="external")
     if url:
+        _validate_external_url(url)
         with urllib.request.urlopen(url, timeout=timeout) as response:
+            raw = response.read(MAX_EXTERNAL_THEOREM_BYTES + 1)
+            if len(raw) > MAX_EXTERNAL_THEOREM_BYTES:
+                raise ValueError("External theorem URL response exceeds maximum allowed size")
             charset = response.headers.get_content_charset("utf-8")
-            return _load_json_payload(response.read().decode(charset))
+            return _load_json_payload(raw.decode(charset), source="external")
     return []
 
 
@@ -74,7 +103,8 @@ def _load_theorems() -> list[dict[str, Any]]:
     external_path = os.getenv("AI4MATH_THEOREM_EXTERNAL_PATH", "").strip()
     external_url = os.getenv("AI4MATH_THEOREM_EXTERNAL_URL", "").strip()
     timeout = int(os.getenv("AI4MATH_THEOREM_EXTERNAL_TIMEOUT", "5"))
-    cache_key = (source_mode, external_path, external_url, timeout)
+    allow_insecure = os.getenv("AI4MATH_ALLOW_INSECURE_THEOREM_URL", "false").strip().lower()
+    cache_key = (source_mode, external_path, external_url, timeout, allow_insecure)
     cached = _THEOREMS_CACHE.get(cache_key)
     if cached is not None:
         return cached
@@ -92,24 +122,40 @@ def _load_theorems() -> list[dict[str, Any]]:
     elif source_mode == "external":
         theorems = external or builtin
     else:
-        theorems = _dedupe_theorems([*builtin, *external]) or builtin
+        # External theorems take precedence over builtin entries with the same id.
+        theorems = _dedupe_theorems([*external, *builtin]) or builtin
 
     _THEOREMS_CACHE[cache_key] = theorems
     return theorems
 
 
-_FINITE_FIELD_RE = re.compile(
-    r"(?:GF|\\mathbb\{F\}|F|\\mathbb\s*F)\s*[_{\(]\s*(\d+)\s*[\^}\)]\s*\{?\s*(\d+)\s*\}?"
-    r"|(?:GF|F)\s*\(\s*(\d+)\s*\^\s*(\d+)\s*\)"
-    r"|(?:GF|F)\s*\(\s*(\d+)\s*\)"
-    r"|\\mathbb\{F\}_\{(\d+)\^(\d+)\}"
-    r"|F_\{(\d+)\^(\d+)\}"
-    r"|F_(\d+)"
-)
-_BRACED_FINITE_FIELD_RE = re.compile(r"(?:F|\\mathbb\{F\})_\{(\d+)\^\{?(\d+)\}?\}")
+def _is_prime(n: int) -> bool:
+    if n < 2:
+        return False
+    if n in (2, 3):
+        return True
+    if n % 2 == 0 or n % 3 == 0:
+        return False
+    d = 5
+    while d * d <= n:
+        if n % d == 0 or n % (d + 2) == 0:
+            return False
+        d += 6
+    return True
 
-_POLY_DEGREE_RE = re.compile(r"[xyz]\^(\d+)")
-_LARGE_INT_RE = re.compile(r"(\d+)\s*[\^]\s*(\d+)")
+
+_FINITE_FIELD_RE = re.compile(
+    r"(?:GF|\\mathbb\{F\}|(?<![A-Za-z])F|\\mathbb\s*F)\s*[_{\(]\s*(\d+)\s*[\^}\)]\s*\{?\s*(\d+)\s*\}?"
+    r"|(?:GF|(?<![A-Za-z])F)\s*\(\s*(\d+)\s*\^\s*(\d+)\s*\)"
+    r"|(?:GF)\s*\(\s*(\d+)\s*\)"
+    r"|\\mathbb\{F\}_\{(\d+)\^(\d+)\}"
+    r"|(?<![A-Za-z])F_\{(\d+)\^(\d+)\}"
+    r"|(?:\\mathbb\{F\}|(?<![A-Za-z])F)_\{?(\d+)\}?(?![\d^])"
+)
+_BRACED_FINITE_FIELD_RE = re.compile(r"(?:(?<![A-Za-z])F|\\mathbb\{F\})_\{(\d+)\^\{?(\d+)\}?\}")
+_POLY_DEGREE_RE = re.compile(r"[xyz]\^\{?(\d+)\}?")
+_LARGE_INT_RE = re.compile(r"(\d+)\s*[\^]\s*\{?(\d+)\}?")
+_FINITE_FIELD_CONTEXT_RE = re.compile(r"有限域|finite\s+field|galois\s+field|扩域", re.IGNORECASE)
 
 
 def _extract_finite_field(text: str) -> tuple[int, int] | None:
@@ -123,10 +169,12 @@ def _extract_finite_field(text: str) -> tuple[int, int] | None:
                 return int(groups[i]), int(groups[i + 1])
         if groups[-1]:
             return int(groups[-1]), 1
-    for m in _LARGE_INT_RE.finditer(text):
-        base, exp = int(m.group(1)), int(m.group(2))
-        if 2 <= base <= 100 and exp >= 2:
-            return base, exp
+    # Only fall back to bare p^n if finite-field context is explicitly present and base is prime.
+    if _FINITE_FIELD_CONTEXT_RE.search(text):
+        for m in _LARGE_INT_RE.finditer(text):
+            base, exp = int(m.group(1)), int(m.group(2))
+            if 2 <= base <= 1000 and exp >= 2 and _is_prime(base):
+                return base, exp
     return None
 
 
@@ -166,30 +214,55 @@ def _estimate_scale(text: str) -> dict[str, Any]:
     return info
 
 
+def _keyword_weight_and_match(kw: str, lowered: str) -> float:
+    kw_low = kw.strip().lower()
+    if not kw_low:
+        return 0.0
+    is_ascii_word = kw_low.isascii() and all(ch.isalnum() or ch in "-_ " for ch in kw_low)
+    if is_ascii_word and len(kw_low) <= 4:
+        if re.search(rf"(?<![a-z0-9]){re.escape(kw_low)}(?![a-z0-9])", lowered):
+            return 1.0
+        return 0.0
+    if kw_low not in lowered:
+        return 0.0
+    # Short 1-2 character non-ASCII generic terms (e.g. "对称", "计数", "曲线", "界") require corroboration.
+    if not kw_low.isascii() and len(kw_low) <= 2:
+        return 0.5
+    return 1.0
+
+
 def _match_theorems(text: str) -> list[dict[str, Any]]:
     theorems = _load_theorems()
-    lowered = text.lower()
-    scored: list[tuple[float, dict[str, Any]]] = []
+    bounded = text[:MAX_PROBLEM_MATCH_CHARS]
+    lowered = bounded.lower()
+    scored: list[tuple[float, int, int, dict[str, Any]]] = []
 
     for thm in theorems:
         score = 0.0
+        kw_hits = 0
+        sig_hits = 0
         for kw in thm.get("keywords", []):
-            if kw.lower() in lowered:
-                score += 1.0
+            w = _keyword_weight_and_match(str(kw), lowered)
+            if w > 0:
+                score += w
+                kw_hits += 1
         for sig in thm.get("signals", []):
             try:
-                if re.search(sig, text, re.IGNORECASE):
+                if re.search(sig, bounded, re.IGNORECASE):
                     score += 2.0
+                    sig_hits += 1
             except re.error:
                 pass
-        if score > 0:
-            scored.append((score, thm))
+        if score >= 1.0:
+            scored.append((score, sig_hits, kw_hits, thm))
 
-    scored.sort(key=lambda item: -item[0])
+    scored.sort(key=lambda item: (-item[0], -item[1], -item[2]))
     matched: list[dict[str, Any]] = []
-    for score, thm in scored[:6]:
+    for score, sig_hits, kw_hits, thm in scored[:6]:
         enriched = dict(thm)
         enriched["_match_score"] = score
+        enriched["_signal_hits"] = sig_hits
+        enriched["_keyword_hits"] = kw_hits
         matched.append(enriched)
     return matched
 
@@ -299,6 +372,7 @@ def analyze_problem(problem: str, detected_objects: str = "") -> dict[str, Any]:
         confidence = _normalize_confidence(thm.get("confidence"), score)
         preferred_recipe = thm.get("preferred_recipe", [])
         avoid_patterns = thm.get("avoid_patterns", [])
+        source = str(thm.get("_source", "builtin"))
         suggestions.append({
             "theorem": thm["name"],
             "theorem_zh": thm.get("name_zh", ""),
@@ -310,6 +384,7 @@ def analyze_problem(problem: str, detected_objects: str = "") -> dict[str, Any]:
             "avoid_patterns": avoid_patterns,
             "confidence": confidence,
             "score": score,
+            "source": source,
             "sage_hint": thm.get("sage_hint", ""),
         })
         if preferred_recipe or avoid_patterns:
@@ -317,11 +392,13 @@ def analyze_problem(problem: str, detected_objects: str = "") -> dict[str, Any]:
                 "theorem": thm["name"],
                 "confidence": confidence,
                 "score": score,
+                "source": source,
+                "signal_hits": int(thm.get("_signal_hits", 0)),
+                "keyword_hits": int(thm.get("_keyword_hits", 0)),
                 "preferred_recipe": preferred_recipe,
                 "avoid_patterns": avoid_patterns,
                 "sage_hint": thm.get("sage_hint", ""),
             })
-
 
     scale = scale_info.get("scale", "unknown")
     allow_bruteforce = scale in {"trivial", "moderate"}

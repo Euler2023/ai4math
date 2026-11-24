@@ -2,48 +2,46 @@
 
 from __future__ import annotations
 
+import ast
 import json
+import re
 import sympy as sp
 from sympy import stats as sp_stats
-from sympy.parsing.sympy_parser import (
-    parse_expr,
-    standard_transformations,
-    implicit_multiplication_application,
-    convert_xor,
-)
 
+from ai4math.tools._shared import (
+    format_result,
+    get_or_make_symbol,
+    make_local_dict,
+    safe_literal_eval,
+    safe_parse_expr,
+)
 from ai4math.tools.registry import math_tool
 
-_TRANSFORMATIONS = standard_transformations + (
-    implicit_multiplication_application,
-    convert_xor,
-)
-
-_LOCAL_DICT: dict = {}
-for _name in "x y z t a b c n m k p q alpha beta gamma theta lambda mu sigma rho tau".split():
-    _LOCAL_DICT[_name] = sp.Symbol(_name, positive=True) if _name in ("n", "k", "alpha", "beta", "lambda", "sigma") else sp.Symbol(_name)
-_LOCAL_DICT["pi"] = sp.pi
-_LOCAL_DICT["e"] = sp.E
-_LOCAL_DICT["oo"] = sp.oo
-_LOCAL_DICT["inf"] = sp.oo
+_POSITIVE_PROB_SYMBOLS = frozenset({"n", "k", "alpha", "beta", "lambda", "sigma"})
+_LOCAL_DICT = make_local_dict(_POSITIVE_PROB_SYMBOLS)
 
 
-def _parse(expr_str: str) -> sp.Expr:
-    return parse_expr(expr_str, local_dict=_LOCAL_DICT, transformations=_TRANSFORMATIONS)
+def _parse(expr_str: str, extra_locals: dict | None = None) -> sp.Expr:
+    return safe_parse_expr(expr_str, local_dict=_LOCAL_DICT, extra_locals=extra_locals)
 
 
 def _sym(name: str) -> sp.Symbol:
-    if name in _LOCAL_DICT and isinstance(_LOCAL_DICT[name], sp.Symbol):
-        return _LOCAL_DICT[name]
-    return sp.Symbol(name)
+    return get_or_make_symbol(name, _LOCAL_DICT)
 
 
 def _result(title: str, **kwargs) -> str:
-    out = {"title": title}
-    for k, v in kwargs.items():
-        out[k] = str(v)
-    out["_display_instruction"] = "你必须在回复中用 $$ LaTeX $$ 展示此工具返回的 latex 字段内容，不得省略"
-    return json.dumps(out, ensure_ascii=False)
+    return format_result(title, **kwargs)
+
+
+def _parse_params(params: str | dict) -> dict:
+    if isinstance(params, dict):
+        return params
+    if not params or not params.strip():
+        return {}
+    res = safe_literal_eval(params)
+    if not isinstance(res, dict):
+        raise ValueError("params 必须是 JSON 对象或字典格式")
+    return res
 
 
 # ---------------------------------------------------------------------------
@@ -51,8 +49,8 @@ def _result(title: str, **kwargs) -> str:
 # ---------------------------------------------------------------------------
 
 def _make_distribution(dist_type: str, params: dict, name: str = "X"):
-    """Create a SymPy stats random variable."""
-    dist_type = dist_type.lower()
+    """Create a SymPy stats random variable with exact decimal-to-Rational conversion."""
+    dist_type = dist_type.lower().strip()
 
     constructors = {
         # Continuous
@@ -66,23 +64,117 @@ def _make_distribution(dist_type: str, params: dict, name: str = "X"):
         "t": lambda p: sp_stats.StudentT(name, p.get("nu", 1)),
         # Discrete
         "poisson": lambda p: sp_stats.Poisson(name, p.get("lambda", 1)),
-        "binomial": lambda p: sp_stats.Binomial(name, p.get("n", 10), p.get("p", 0.5)),
-        "geometric": lambda p: sp_stats.Geometric(name, p.get("p", 0.5)),
-        "bernoulli": lambda p: sp_stats.Bernoulli(name, p.get("p", 0.5)),
+        "binomial": lambda p: sp_stats.Binomial(name, p.get("n", 10), p.get("p", sp.Rational(1, 2))),
+        "geometric": lambda p: sp_stats.Geometric(name, p.get("p", sp.Rational(1, 2))),
+        "bernoulli": lambda p: sp_stats.Bernoulli(name, p.get("p", sp.Rational(1, 2))),
     }
 
     if dist_type not in constructors:
         raise ValueError(f"未知分布: {dist_type}。支持: {', '.join(constructors.keys())}")
 
-    # Convert string params to sympy if needed
     parsed_params = {}
     for k, v in params.items():
         if isinstance(v, str):
-            parsed_params[k] = _parse(v)
+            # Convert exact decimal strings like "0.3" to Rational("0.3") = 3/10
+            if re.fullmatch(r"[+-]?\d+\.\d+", v.strip()):
+                parsed_params[k] = sp.Rational(v.strip())
+            else:
+                parsed_params[k] = _parse(v)
+        elif isinstance(v, bool):
+            parsed_params[k] = int(v)
+        elif isinstance(v, (int, float)):
+            # str(v) avoids IEEE-754 binary mantissa expansion such as Rational(0.3) -> 5404319552844595/2^54
+            parsed_params[k] = sp.Rational(str(v))
         else:
-            parsed_params[k] = sp.Rational(v) if isinstance(v, (int, float)) else v
+            parsed_params[k] = v
 
     return constructors[dist_type](parsed_params)
+
+
+def _normalize_single_comparison(lhs: sp.Expr, op_node: ast.cmpop, rhs: sp.Expr):
+    """Build a SymPy relational, rewriting |f(X)| op c into compound inequalities SymPy stats can reduce."""
+    # Canonicalize c op Abs(...) into Abs(...) rev_op c
+    if isinstance(rhs, sp.Abs) and not isinstance(lhs, sp.Abs):
+        rev_map = {
+            ast.Lt: ast.Gt,
+            ast.LtE: ast.GtE,
+            ast.Gt: ast.Lt,
+            ast.GtE: ast.LtE,
+            ast.Eq: ast.Eq,
+            ast.NotEq: ast.NotEq,
+        }
+        op_type = rev_map.get(type(op_node))
+        if op_type is not None:
+            lhs, rhs = rhs, lhs
+            op_node = op_type()
+
+    if isinstance(lhs, sp.Abs) and not rhs.free_symbols.intersection(lhs.free_symbols):
+        inner = lhs.args[0]
+        if isinstance(op_node, ast.Gt):
+            return sp.true if rhs.is_negative else sp.Or(inner > rhs, inner < -rhs)
+        if isinstance(op_node, ast.GtE):
+            return sp.true if (rhs.is_negative or rhs.is_zero) else sp.Or(inner >= rhs, inner <= -rhs)
+        if isinstance(op_node, ast.Lt):
+            return sp.false if (rhs.is_negative or rhs.is_zero) else sp.And(inner > -rhs, inner < rhs)
+        if isinstance(op_node, ast.LtE):
+            return sp.false if rhs.is_negative else sp.And(inner >= -rhs, inner <= rhs)
+
+    op_funcs = {
+        ast.Gt: sp.Gt,
+        ast.GtE: sp.Ge,
+        ast.Lt: sp.Lt,
+        ast.LtE: sp.Le,
+        ast.Eq: sp.Eq,
+        ast.NotEq: sp.Ne,
+    }
+    for cls, fn in op_funcs.items():
+        if isinstance(op_node, cls):
+            return fn(lhs, rhs)
+    raise ValueError(f"不支持的比较运算符: {type(op_node).__name__}")
+
+
+def _parse_prob_condition(cond_str: str, x_sym: sp.Symbol, X) -> Any:
+    """Parse single, chained ('0.5 < x < 0.8'), boolean ('and'/'or'), and '|x| > c' conditions."""
+    # Normalize |...| notation to abs(...) when paired
+    cleaned = re.sub(r"\|([^|]+)\|", r"abs(\1)", cond_str.strip())
+
+    def _parse_scalar_or_rv(expr_code: str) -> sp.Expr:
+        # Convert float literals in condition to exact Rationals for clean exact integration
+        expr_exact = re.sub(
+            r"(?<![A-Za-z0-9_.])(\d+\.\d+)(?![A-Za-z0-9_.])",
+            r"Rational('\1')",
+            expr_code,
+        )
+        parsed = _parse(expr_exact, extra_locals={"X": x_sym})
+        return parsed.subs(x_sym, X)
+
+    tree = ast.parse(cleaned, "<prob_cond>", mode="eval")
+
+    def _convert(node: ast.AST):
+        if isinstance(node, ast.BoolOp):
+            converted = [_convert(v) for v in node.values]
+            if isinstance(node.op, ast.And):
+                return sp.And(*converted)
+            if isinstance(node.op, ast.Or):
+                return sp.Or(*converted)
+            raise ValueError(f"不支持的逻辑运算: {type(node.op).__name__}")
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+            return sp.Not(_convert(node.operand))
+        if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.BitAnd, ast.BitOr)):
+            left = _convert(node.left)
+            right = _convert(node.right)
+            return sp.And(left, right) if isinstance(node.op, ast.BitAnd) else sp.Or(left, right)
+        if isinstance(node, ast.Compare):
+            pieces = []
+            cur_left = _parse_scalar_or_rv(ast.unparse(node.left))
+            for op_node, comp_ast in zip(node.ops, node.comparators):
+                cur_right = _parse_scalar_or_rv(ast.unparse(comp_ast))
+                pieces.append(_normalize_single_comparison(cur_left, op_node, cur_right))
+                cur_left = cur_right
+            return pieces[0] if len(pieces) == 1 else sp.And(*pieces)
+        raise ValueError(f"无法解析概率条件: {cond_str}")
+
+    return _convert(tree.body)
 
 
 # ---------------------------------------------------------------------------
@@ -97,17 +189,17 @@ def distribution_info(dist_type: str, params: str = "{}") -> str:
         dist_type: 分布类型: normal, exponential, uniform, gamma, beta, chi_squared, cauchy, t, poisson, binomial, geometric, bernoulli
         params: JSON 格式的参数，例如 '{"mu": 0, "sigma": 1}' 或 '{"lambda": 2}'
     """
-    import ast
-    p = ast.literal_eval(params) if isinstance(params, str) else params
+    p = _parse_params(params)
     X = _make_distribution(dist_type, p)
     x = _sym("x")
 
-    info = {"分布": f"{dist_type}({params})"}
+    info: dict[str, str] = {"title": "概率分布信息", "分布": f"{dist_type}({params})"}
 
     try:
         pdf = sp_stats.density(X)(x)
         info["PDF/PMF"] = sp.pretty(pdf)
         info["PDF_latex"] = sp.latex(pdf)
+        info["latex"] = sp.latex(pdf)
     except Exception:
         info["PDF/PMF"] = "无法计算"
 
@@ -138,17 +230,17 @@ def compute_expectation(dist_type: str, params: str = "{}", expression: str = "x
         params: JSON 格式的分布参数
         expression: 要计算期望的表达式 g(X)，用 'x' 表示随机变量，例如 'x**2' 计算 E[X²]
     """
-    import ast
-    p = ast.literal_eval(params) if isinstance(params, str) else params
+    p = _parse_params(params)
     X = _make_distribution(dist_type, p)
 
-    # Build the expression in terms of X
     x_sym = _sym("x")
-    g = _parse(expression)
-    # Substitute x with X
+    g = _parse(expression, extra_locals={"X": x_sym})
     g_X = g.subs(x_sym, X)
 
-    result = sp.simplify(sp_stats.E(g_X))
+    raw_exp = sp_stats.E(g_X)
+    if hasattr(raw_exp, "doit"):
+        raw_exp = raw_exp.doit()
+    result = sp.simplify(raw_exp)
     return _result(
         f"期望 E[{expression}]",
         distribution=f"{dist_type}({params})",
@@ -166,15 +258,17 @@ def compute_variance(dist_type: str, params: str = "{}", expression: str = "x") 
         params: JSON 格式的分布参数
         expression: 表达式，默认 'x' 表示 Var[X]
     """
-    import ast
-    p = ast.literal_eval(params) if isinstance(params, str) else params
+    p = _parse_params(params)
     X = _make_distribution(dist_type, p)
 
     x_sym = _sym("x")
-    g = _parse(expression)
+    g = _parse(expression, extra_locals={"X": x_sym})
     g_X = g.subs(x_sym, X)
 
-    result = sp.simplify(sp_stats.variance(g_X))
+    raw_var = sp_stats.variance(g_X)
+    if hasattr(raw_var, "doit"):
+        raw_var = raw_var.doit()
+    result = sp.simplify(raw_var)
     return _result(
         f"方差 Var[{expression}]",
         distribution=f"{dist_type}({params})",
@@ -183,33 +277,28 @@ def compute_variance(dist_type: str, params: str = "{}", expression: str = "x") 
     )
 
 
-@math_tool(category="probability", description="计算概率 P(condition)，例如 P(X > 2)")
+@math_tool(category="probability", description="计算概率 P(condition)，支持单侧、双侧区间、绝对值与逻辑组合，例如 P(0.5 < x < 0.8) 或 P(abs(x) > 2)")
 def compute_probability(dist_type: str, params: str = "{}", condition: str = "x > 0") -> str:
     """计算概率。
 
     Args:
         dist_type: 分布类型
         params: JSON 格式的分布参数
-        condition: 条件表达式，例如 'x > 0', 'x <= 2', 'x >= 1'
+        condition: 条件表达式，例如 'x > 0', '0.5 < x < 0.8', 'abs(x) > 2', 'x > 0.2 and x < 0.8'
     """
-    import ast
-    p = ast.literal_eval(params) if isinstance(params, str) else params
+    p = _parse_params(params)
     X = _make_distribution(dist_type, p)
     x_sym = _sym("x")
 
-    # Parse condition
-    cond_str = condition.strip()
-    for op_str, op_func in [(">=", sp.Ge), ("<=", sp.Le), ("!=", sp.Ne), (">", sp.Gt), ("<", sp.Lt), ("==", sp.Eq)]:
-        if op_str in cond_str:
-            parts = cond_str.split(op_str)
-            lhs = _parse(parts[0].strip()).subs(x_sym, X)
-            rhs = _parse(parts[1].strip())
-            cond = op_func(lhs, rhs)
-            break
-    else:
-        return _result("错误", error=f"无法解析条件: {condition}")
+    try:
+        cond = _parse_prob_condition(condition, x_sym, X)
+    except Exception as e:
+        return _result("错误", error=f"无法解析条件 {condition!r}: {e}")
 
-    result = sp.simplify(sp_stats.P(cond))
+    raw_prob = sp_stats.P(cond)
+    if hasattr(raw_prob, "doit"):
+        raw_prob = raw_prob.doit()
+    result = sp.simplify(raw_prob)
     return _result(
         f"概率 P({condition})",
         distribution=f"{dist_type}({params})",
@@ -226,13 +315,15 @@ def moment_generating_function(dist_type: str, params: str = "{}") -> str:
         dist_type: 分布类型
         params: JSON 格式的分布参数
     """
-    import ast
-    p = ast.literal_eval(params) if isinstance(params, str) else params
+    p = _parse_params(params)
     X = _make_distribution(dist_type, p)
     t = _sym("t")
 
     try:
-        mgf = sp.simplify(sp_stats.E(sp.exp(t * X)))
+        raw_mgf = sp_stats.E(sp.exp(t * X))
+        if hasattr(raw_mgf, "doit"):
+            raw_mgf = raw_mgf.doit()
+        mgf = sp.simplify(raw_mgf)
         return _result(
             "矩母函数 M_X(t)",
             distribution=f"{dist_type}({params})",
@@ -250,7 +341,6 @@ def simplify_probability_expression(expr: str) -> str:
     Args:
         expr: 概率表达式，例如 'E(X)**2 - E(X**2) + Var(X)' 这里使用符号化简
     """
-    # This works on purely symbolic expressions
     e = _parse(expr)
     simplified = sp.simplify(e)
     expanded = sp.expand(simplified)
@@ -276,7 +366,7 @@ def bayes_theorem(prior: str, likelihood: str, evidence: str = "") -> str:
     P_A = _parse(prior)
     P_B_given_A = _parse(likelihood)
 
-    if evidence:
+    if evidence.strip():
         P_B = _parse(evidence)
         posterior = sp.simplify(P_B_given_A * P_A / P_B)
         return _result(
@@ -309,13 +399,15 @@ def characteristic_function(dist_type: str, params: str = "{}") -> str:
         dist_type: 分布类型
         params: JSON 格式的分布参数
     """
-    import ast
-    p = ast.literal_eval(params) if isinstance(params, str) else params
+    p = _parse_params(params)
     X = _make_distribution(dist_type, p)
     t = _sym("t")
 
     try:
-        cf = sp.simplify(sp_stats.E(sp.exp(sp.I * t * X)))
+        raw_cf = sp_stats.E(sp.exp(sp.I * t * X))
+        if hasattr(raw_cf, "doit"):
+            raw_cf = raw_cf.doit()
+        cf = sp.simplify(raw_cf)
         return _result(
             "特征函数 φ_X(t)",
             distribution=f"{dist_type}({params})",
@@ -356,4 +448,5 @@ def covariance_correlation(expr_xy: str, expr_x: str, expr_y: str, expr_x2: str,
         Corr_XY=sp.pretty(corr),
         latex_cov=sp.latex(cov),
         latex_corr=sp.latex(corr),
+        latex=f"\\operatorname{{Cov}}(X,Y) = {sp.latex(cov)},\\quad \\rho_{{X,Y}} = {sp.latex(corr)}",
     )

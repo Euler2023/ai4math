@@ -188,53 +188,72 @@ _COMPLEX_ROUTING_HINTS = (
     "点数", "hasse", "galois", "groebner", "mordell-weil",
 )
 
+_PLOTTING_KEYWORDS_RE = re.compile(
+    r"画|绘|图像|图形|曲线图|色相|可视化|三维曲面|plot|graph|draw|sketch|visuali[sz]|phase\s*portrait|surface",
+    re.IGNORECASE,
+)
+
+_META_SKIP_KEYS = {
+    "_display_instruction",
+    "title",
+    "code",
+    "setup_code",
+    "input",
+    "latex",
+    "latex_final",
+    "latex_q",
+    "latex_r",
+    "latex_cov",
+    "latex_corr",
+    "output",
+    "stdout",
+    "image_path",
+    "steps_detail",
+    "steps_summary",
+    "PDF_latex",
+}
+
+
+def _as_bool(value: Any, fallback: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        cleaned = value.strip().lower()
+        if cleaned in ("true", "1", "yes"):
+            return True
+        if cleaned in ("false", "0", "no", ""):
+            return False
+    return fallback
+
+
+def _as_str_list(value: Any, fallback: list[str]) -> list[str]:
+    if not isinstance(value, list):
+        return list(fallback)
+    cleaned = [str(item).strip() for item in value if str(item).strip()]
+    return cleaned if cleaned else list(fallback)
+
 
 # ---------------------------------------------------------------------------
 # Helper: post-process Markdown to fix display math inside blockquotes
 # ---------------------------------------------------------------------------
 
 def _fix_blockquote_display_math(text: str) -> str:
-    r"""Remove ``> `` prefix from ``$$...$$`` blocks inside blockquotes.
-
-    In Obsidian, display math (``$$...$$``) inside a ``> `` blockquote
-    often fails to render.  This function detects such patterns and
-    "breaks out" of the quote for the math lines, e.g.::
-
-        > **结论：** some text
-        > $$
-        > \int ...
-        > $$
-        > more text
-
-    becomes::
-
-        > **结论：** some text
-        >
-        $$
-        \int ...
-        $$
-        >
-        > more text
-    """
+    r"""Remove ``> `` prefix from ``$$...$$`` blocks inside blockquotes."""
     lines = text.split("\n")
     result: list[str] = []
     i = 0
     while i < len(lines):
         line = lines[i]
         stripped = line.lstrip("> ").strip()
-        if (
-            line.startswith(">")
-            and stripped == "$$"
-        ):
+        if line.startswith(">") and stripped == "$$":
             math_lines = []
             i += 1
             while i < len(lines):
                 inner = lines[i]
                 inner_stripped = inner.lstrip("> ").strip()
-                if (
-                    inner.startswith(">")
-                    and inner_stripped == "$$"
-                ):
+                if inner.startswith(">") and inner_stripped == "$$":
                     i += 1
                     break
                 if inner.startswith("> "):
@@ -266,15 +285,9 @@ def _format_tool_result_md(
     arguments: dict,
     result: str,
 ) -> str | None:
-    """Format a *successful* tool result as a compact Markdown line.
-
-    Returns ``None`` for errors / empty results so that the caller
-    can simply skip them — failed tool attempts should not appear in
-    the final document.
-
-    Successful results are rendered as a single blockquote line with
-    the LaTeX formula, blending naturally into the surrounding text.
-    """
+    """Format a *successful* tool result as a Markdown blockquote."""
+    if func_name == "theorem_advisor":
+        return None
 
     try:
         data = json.loads(result)
@@ -295,34 +308,69 @@ def _format_tool_result_md(
     if data.get("error"):
         return None
 
-    latex = data.get("latex", "")
-    output = data.get("output", "")
-    image_path = data.get("image_path", "")
-
+    image_path = str(data.get("image_path", "")).strip()
     if image_path:
         title = data.get("title", func_name)
         return f"> 📊 `{func_name}` 绘图结果：\n> ![{title}]({image_path})"
 
+    latex = str(data.get("latex", "")).strip()
+    if not latex:
+        if data.get("latex_final"):
+            latex = str(data["latex_final"]).strip()
+        elif data.get("latex_cov") or data.get("latex_corr"):
+            cov_l = data.get("latex_cov", "")
+            corr_l = data.get("latex_corr", "")
+            latex = f"\\operatorname{{Cov}} = {cov_l},\\quad \\rho = {corr_l}"
+        elif data.get("latex_q") or data.get("latex_r"):
+            latex = f"q = {data.get('latex_q', '')},\\quad r = {data.get('latex_r', '')}"
+
     if latex and "None" in latex:
         latex = ""
 
-    if not latex and not output:
-        return None
+    output = str(data.get("output", "")).strip()
+    stdout = str(data.get("stdout", "")).strip()
+    steps_summary = str(data.get("steps_summary", "")).strip()
 
+    # Collect extra structured summary fields (e.g. rank, torsion, class_number, counterexamples, solutions)
+    extra_items: list[str] = []
+    for k, v in data.items():
+        if k in _META_SKIP_KEYS or k.startswith("step_"):
+            continue
+        v_str = str(v).strip()
+        if not v_str or v_str == output:
+            continue
+        if len(v_str) > 240:
+            v_str = v_str[:237] + "..."
+        extra_items.append(f"{k}: `{v_str}`")
+
+    lines: list[str] = []
     if latex:
-        return f"> 📐 `{func_name}` 计算结果：$${latex}$$"
+        lines.append(f"> 📐 `{func_name}` 计算结果：$${latex}$$")
+        if steps_summary:
+            for sl in steps_summary.splitlines():
+                lines.append(f"> - {sl}")
+        elif func_name in ("elliptic_curve_info", "number_field_info", "distribution_info") and extra_items:
+            lines.append("> " + " | ".join(extra_items[:6]))
+    elif output:
+        if "\n" in output or len(output) > 120:
+            lines.append(f"> 📐 `{func_name}` 计算结果：")
+            lines.append("> ```")
+            for ol in output.splitlines():
+                lines.append(f"> {ol}")
+            lines.append("> ```")
+        else:
+            lines.append(f"> 📐 `{func_name}` 计算结果：`{output}`")
+    elif extra_items:
+        lines.append(f"> 📐 `{func_name}` 计算结果：" + "；".join(extra_items[:8]))
 
-    output = output.strip()
-    if not output:
-        return None
-    if "\n" in output or len(output) > 120:
-        lines = [f"> 📐 `{func_name}` 计算结果：", "> ```"]
-        for ol in output.splitlines():
-            lines.append(f"> {ol}")
+    if stdout and stdout != output:
+        lines.append("> 打印输出：")
         lines.append("> ```")
-        return "\n".join(lines)
+        for sl in stdout.splitlines()[:30]:
+            lines.append(f"> {sl}")
+        lines.append("> ```")
 
-    return f"> 📐 `{func_name}` 计算结果：`{output}`"
+    return "\n".join(lines) if lines else None
 
 
 class MathLLMClient:
@@ -338,7 +386,8 @@ class MathLLMClient:
         self.base_url = base_url or os.getenv(
             "OPENAI_BASE_URL", "https://api.deepseek.com/beta",
         )
-        self.model = model or os.getenv("AI4MATH_MODEL", "deepseek-v4-pro")
+        explicit_model = (model or os.getenv("AI4MATH_MODEL", "")).strip()
+        self.model = explicit_model or "deepseek-v4-pro"
 
         self.max_iterations = int(
             os.getenv("AI4MATH_MAX_ITERATIONS", "40"),
@@ -352,24 +401,22 @@ class MathLLMClient:
         self.reasoning_effort = os.getenv(
             "AI4MATH_REASONING_EFFORT", "high",
         )
-        self.auto_route = os.getenv(
-            "AI4MATH_AUTO_ROUTE", "true",
-        ).lower() in ("true", "1", "yes")
-        self.flash_model = os.getenv(
-            "AI4MATH_FLASH_MODEL", "deepseek-v4-flash",
-        )
-        self.pro_model = os.getenv(
-            "AI4MATH_PRO_MODEL", "deepseek-v4-pro",
-        )
-        self.preplan_enabled = os.getenv(
-            "AI4MATH_PREPLAN_ENABLED", "true",
-        ).lower() in ("true", "1", "yes")
-        self.preplan_model = os.getenv(
-            "AI4MATH_PREPLAN_MODEL", self.pro_model,
-        )
+        self.auto_route = _as_bool(os.getenv("AI4MATH_AUTO_ROUTE", "true"), True)
+
+        # If the user explicitly configured AI4MATH_MODEL (or passed model=...) without setting
+        # the individual route/planner models, fall back to that explicit model instead of
+        # sending requests to non-existent deepseek-v4-* endpoints.
+        default_flash = explicit_model or "deepseek-v4-flash"
+        default_pro = explicit_model or "deepseek-v4-pro"
+        self.flash_model = os.getenv("AI4MATH_FLASH_MODEL", "").strip() or default_flash
+        self.pro_model = os.getenv("AI4MATH_PRO_MODEL", "").strip() or default_pro
+        self.preplan_enabled = _as_bool(os.getenv("AI4MATH_PREPLAN_ENABLED", "true"), True)
+        self.preplan_model = os.getenv("AI4MATH_PREPLAN_MODEL", "").strip() or self.pro_model
         self.preplan_max_tokens = int(
             os.getenv("AI4MATH_PREPLAN_MAX_TOKENS", "512"),
         )
+        self.trim_tools = _as_bool(os.getenv("AI4MATH_TRIM_TOOLS", "true"), True)
+
         self.client = OpenAI(
             api_key=self.api_key, base_url=self.base_url,
         )
@@ -408,50 +455,62 @@ class MathLLMClient:
                 max_tokens=8,
                 temperature=0.0,
             )
-            answer = response.choices[0].message.content.strip().lower()
-            if "complex" in answer:
-                return "complex"
-            return "simple"
+            answer = (response.choices[0].message.content or "").strip().lower()
+            if answer == "simple" or ("simple" in answer and "complex" not in answer):
+                return "simple"
+            return "complex"
         except Exception:
             return "complex"
 
     def _build_preplan_context(self, analysis: dict[str, Any], plan: dict[str, Any], decomposition: dict[str, Any] | None = None) -> str:
         parts: list[str] = []
 
-        if decomposition and decomposition.get("subproblems"):
-            parts.append("子问题分解：")
-            for sp in decomposition["subproblems"]:
-                deps = ", ".join(sp.get("depends_on", [])) or "none"
-                parts.append(f"- [{sp.get('id', '?')}] {sp.get('statement', '')} (depends: {deps}, domain: {sp.get('domain', '?')})")
-            if decomposition.get("final_target"):
-                parts.append(f"- 最终目标: {decomposition['final_target']}")
-            if decomposition.get("dependency_order"):
-                parts.append(f"- 求解顺序: {' -> '.join(decomposition['dependency_order'])}")
-            parts.append("- 执行规则: 必须按依赖顺序逐步求解，每个子问题完成后再进入下一个。每个子问题的搜索/筛选应合并为一次 sage_eval 调用，不要逐个候选值单独调用工具。")
-            parts.append("")
+        if isinstance(decomposition, dict):
+            raw_subs = decomposition.get("subproblems")
+            if isinstance(raw_subs, list) and raw_subs:
+                valid_subs = [sp_item for sp_item in raw_subs if isinstance(sp_item, dict)]
+                if valid_subs:
+                    parts.append("子问题分解：")
+                    for sp_item in valid_subs:
+                        deps_list = _as_str_list(sp_item.get("depends_on"), [])
+                        deps = ", ".join(deps_list) or "none"
+                        parts.append(
+                            f"- [{sp_item.get('id', '?')}] {sp_item.get('statement', '')} "
+                            f"(depends: {deps}, domain: {sp_item.get('domain', '?')})"
+                        )
+                    if decomposition.get("final_target"):
+                        parts.append(f"- 最终目标: {decomposition['final_target']}")
+                    dep_order = _as_str_list(decomposition.get("dependency_order"), [])
+                    if dep_order:
+                        parts.append(f"- 求解顺序: {' -> '.join(dep_order)}")
+                    parts.append("- 执行规则: 必须按依赖顺序逐步求解，每个子问题完成后再进入下一个。每个子问题的搜索/筛选应合并为一次 sage_eval 调用，不要逐个候选值单独调用工具。")
+                    parts.append("")
 
-        strategy = plan.get("strategy", "")
-        should_use_theory_first = bool(plan.get("should_use_theory_first"))
-        recommended_tools = ", ".join(plan.get("recommended_tools", [])) or "无"
-        key_invariants = ", ".join(plan.get("key_invariants", [])) or "无"
+        strategy = str(plan.get("strategy", ""))
+        should_use_theory_first = _as_bool(plan.get("should_use_theory_first"), False)
+        recommended_tools = ", ".join(_as_str_list(plan.get("recommended_tools"), [])) or "无"
+        key_invariants = ", ".join(_as_str_list(plan.get("key_invariants"), [])) or "无"
         theorem_names = [
-            item.get("theorem") for item in analysis.get("suggested_theorems", []) if item.get("theorem")
+            str(item.get("theorem"))
+            for item in analysis.get("suggested_theorems", [])
+            if isinstance(item, dict) and item.get("theorem")
         ]
-        theorem_focus = ", ".join(plan.get("theorem_focus", [])) or ", ".join(theorem_names) or "无"
-        invariant_targets = ", ".join(plan.get("invariant_targets", [])) or ", ".join(
+        theorem_focus = ", ".join(_as_str_list(plan.get("theorem_focus"), [])) or ", ".join(theorem_names) or "无"
+        invariant_targets = ", ".join(_as_str_list(plan.get("invariant_targets"), [])) or ", ".join(
             analysis.get("suggested_invariants", [])
         ) or key_invariants
-        verification_targets = ", ".join(plan.get("verification_targets", [])) or ", ".join(
+        verification_targets = ", ".join(_as_str_list(plan.get("verification_targets"), [])) or ", ".join(
             analysis.get("verification_checks", [])
         ) or "无"
-        soft_constraints = analysis.get("soft_constraints", [])
+
+        soft_constraints = [sc for sc in analysis.get("soft_constraints", []) if isinstance(sc, dict)]
         top_soft = None
         if soft_constraints:
             top_soft = max(
                 soft_constraints,
                 key=lambda item: (
-                    2 if item.get("confidence") == "high" else 1 if item.get("confidence") == "medium" else 0,
                     float(item.get("score", 0.0)),
+                    2 if item.get("confidence") == "high" else 1 if item.get("confidence") == "medium" else 0,
                 ),
             )
         workflow = analysis.get("workflow", {})
@@ -462,15 +521,20 @@ class MathLLMClient:
             if scale in {"heavy", "infeasible_brute_force"} or should_use_theory_first
             else "允许直接计算，但优先使用已有结构、定理建议与中间不变量。"
         )
+        top_score = float(top_soft.get("score", 0.0)) if top_soft else 0.0
+        # Require at least score >= 2.0 (a regex signal match or >=2 corroborating keywords)
+        # before injecting high-confidence recipes, preventing 1-keyword false-positive hijacking.
         if top_soft and (
-            top_soft.get("confidence") == "high" or float(top_soft.get("score", 0.0)) >= 4.0
+            (top_soft.get("confidence") == "high" and top_score >= 2.0)
+            or top_score >= 4.0
         ):
-            recipe = top_soft.get("preferred_recipe", [])
-            avoids = top_soft.get("avoid_patterns", [])
-            sage_hint = top_soft.get("sage_hint", "")
+            recipe = _as_str_list(top_soft.get("preferred_recipe"), [])
+            avoids = _as_str_list(top_soft.get("avoid_patterns"), [])
+            sage_hint = str(top_soft.get("sage_hint", "")).strip()
+            source_tag = " [外部定理库]" if top_soft.get("source") == "external" else ""
             if recipe or avoids or sage_hint:
                 parts.extend([
-                    f"高置信度定理指导 ({top_soft.get('theorem', 'unknown')}, confidence={top_soft.get('confidence', 'unknown')}, score={top_soft.get('score', 0.0)})：",
+                    f"高置信度定理指导{source_tag} ({top_soft.get('theorem', 'unknown')}, confidence={top_soft.get('confidence', 'unknown')}, score={top_score})：",
                 ])
                 if recipe:
                     parts.append(f"- preferred_recipe: {' → '.join(recipe)}")
@@ -512,9 +576,9 @@ class MathLLMClient:
                 temperature=0.0,
                 response_format={"type": "json_object"},
             )
-            content = response.choices[0].message.content.strip()
+            content = (response.choices[0].message.content or "").strip()
             parsed = json.loads(content)
-            if isinstance(parsed, dict):
+            if isinstance(parsed, dict) and isinstance(parsed.get("subproblems"), list):
                 return parsed
         except Exception:
             return None
@@ -540,6 +604,7 @@ class MathLLMClient:
         if decomposition:
             analysis_payload["decomposition"] = decomposition
 
+        parsed: Any = None
         try:
             response = self.client.chat.completions.create(
                 model=self.preplan_model,
@@ -554,39 +619,41 @@ class MathLLMClient:
                 temperature=0.0,
                 response_format={"type": "json_object"},
             )
-            content = response.choices[0].message.content.strip()
+            content = (response.choices[0].message.content or "").strip()
             parsed = json.loads(content)
-            if isinstance(parsed, dict):
-                plan = {**default_plan, **parsed}
-            else:
-                plan = default_plan
         except Exception:
-            plan = default_plan
+            parsed = None
 
+        raw = parsed if isinstance(parsed, dict) else {}
+        plan = dict(default_plan)
+        plan["should_use_theory_first"] = _as_bool(
+            raw.get("should_use_theory_first"),
+            default_plan["should_use_theory_first"],
+        )
         if analysis.get("scale") in {"heavy", "infeasible_brute_force"}:
             plan["should_use_theory_first"] = True
-        plan["recommended_tools"] = [
-            str(tool) for tool in plan.get("recommended_tools", []) if str(tool).strip()
-        ] or default_plan["recommended_tools"]
-        plan["key_invariants"] = [
-            str(item) for item in plan.get("key_invariants", []) if str(item).strip()
-        ] or default_plan["key_invariants"]
-        plan["theorem_focus"] = [
-            str(item) for item in plan.get("theorem_focus", []) if str(item).strip()
-        ] or default_plan["theorem_focus"]
-        plan["invariant_targets"] = [
-            str(item) for item in plan.get("invariant_targets", []) if str(item).strip()
-        ] or default_plan["invariant_targets"]
-        plan["verification_targets"] = [
-            str(item) for item in plan.get("verification_targets", []) if str(item).strip()
-        ] or default_plan["verification_targets"]
-        plan["problem_type"] = str(plan.get("problem_type") or default_plan["problem_type"])
-        plan["strategy"] = str(plan.get("strategy") or default_plan["strategy"])
+
+        for list_key in ("recommended_tools", "key_invariants", "theorem_focus", "invariant_targets", "verification_targets"):
+            plan[list_key] = _as_str_list(raw.get(list_key), default_plan[list_key])
+
+        if isinstance(raw.get("problem_type"), str) and raw["problem_type"].strip():
+            plan["problem_type"] = raw["problem_type"].strip()
+        if isinstance(raw.get("strategy"), str) and raw["strategy"].strip():
+            plan["strategy"] = raw["strategy"].strip()
         return plan
 
-    def get_tools(self) -> list[dict]:
-        """Get all registered tool schemas."""
+    def get_tools(self, user_message: str = "") -> list[dict]:
+        """Get registered tool schemas, optionally trimming plotting tools when unused."""
+        if self.trim_tools and user_message and not _PLOTTING_KEYWORDS_RE.search(user_message):
+            return ToolRegistry.get_all_schemas(exclude_categories={"plotting", "sage_plotting"})
         return ToolRegistry.get_all_schemas()
+
+    def _clear_stale_preplan_messages(self) -> None:
+        """Remove injected preplanning system messages from earlier turns while keeping SYSTEM_PROMPT."""
+        self.messages = [
+            msg for msg in self.messages
+            if not (msg.get("role") == "system" and msg.get("content") != SYSTEM_PROMPT)
+        ]
 
     def chat(
         self,
@@ -595,17 +662,7 @@ class MathLLMClient:
         on_response=None,
         on_route=None,
     ) -> str:
-        """Send a message and handle tool calling loop.
-
-        Args:
-            user_message: The user's message.
-            on_tool_call: callback(tool_name, args, result).
-            on_response: callback(content) for partial text.
-            on_route: callback(difficulty, model) for routing info.
-
-        Returns:
-            The final Markdown response (LLM text + tool results).
-        """
+        """Send a message and handle tool calling loop."""
         analysis = analyze_problem(user_message)
         decomposition = None
         if analysis.get("structural_complexity", {}).get("is_complex"):
@@ -625,86 +682,121 @@ class MathLLMClient:
             if on_route:
                 on_route(difficulty, effective_model)
 
-        self.messages.append(
-            {"role": "user", "content": user_message},
-        )
-        self.messages.append(
-            {"role": "system", "content": self._build_preplan_context(analysis, preplan, decomposition=decomposition)},
-        )
+        self._clear_stale_preplan_messages()
+        msg_checkpoint = len(self.messages)
+        self.messages.append({"role": "user", "content": user_message})
+        self.messages.append({
+            "role": "system",
+            "content": self._build_preplan_context(analysis, preplan, decomposition=decomposition),
+        })
 
+        tools_schema = self.get_tools(user_message)
         collected_parts: list[str] = []
+        pending_continuation = False
         iteration = 0
 
-        while iteration < self.max_iterations:
-            iteration += 1
+        try:
+            while iteration < self.max_iterations:
+                iteration += 1
 
-            extra_kwargs = {}
-            if "deepseek-v4" in effective_model and effective_reasoning != "none":
-                extra_kwargs["reasoning_effort"] = effective_reasoning
-                extra_kwargs["extra_body"] = {"thinking": {"type": "enabled"}}
+                extra_kwargs = {}
+                if "deepseek-v4" in effective_model and effective_reasoning != "none":
+                    extra_kwargs["reasoning_effort"] = effective_reasoning
+                    extra_kwargs["extra_body"] = {"thinking": {"type": "enabled"}}
 
-            response = self.client.chat.completions.create(
-                model=effective_model,
-                messages=self.messages,
-                tools=self.get_tools(),
-                tool_choice="auto",
-                max_tokens=self.max_tokens,
-                temperature=self.temperature,
-                **extra_kwargs,
+                response = self.client.chat.completions.create(
+                    model=effective_model,
+                    messages=self.messages,
+                    tools=tools_schema,
+                    tool_choice="auto",
+                    max_tokens=self.max_tokens,
+                    temperature=self.temperature,
+                    **extra_kwargs,
+                )
+
+                choice = response.choices[0]
+                message = choice.message
+                self.messages.append(message.model_dump())
+
+                if message.content:
+                    if pending_continuation and collected_parts:
+                        collected_parts[-1] = collected_parts[-1] + message.content
+                    else:
+                        collected_parts.append(message.content)
+                    if on_response:
+                        on_response(message.content)
+
+                if choice.finish_reason == "length":
+                    # If the output was truncated mid-tool-call, we MUST supply matching tool responses
+                    # for every tool_call_id to satisfy the OpenAI/DeepSeek message protocol.
+                    if message.tool_calls:
+                        pending_continuation = False
+                        for tc in message.tool_calls:
+                            self.messages.append({
+                                "role": "tool",
+                                "tool_call_id": tc.id,
+                                "content": json.dumps(
+                                    {"error": "模型输出达到 max_tokens 上限导致工具调用参数被截断，请精简参数或拆分步骤后重试"},
+                                    ensure_ascii=False,
+                                ),
+                            })
+                        continue
+
+                    pending_continuation = True
+                    self.messages.append({
+                        "role": "user",
+                        "content": "继续（从上次截断处接着写，不要重复已输出的内容）",
+                    })
+                    continue
+
+                pending_continuation = False
+
+                if not message.tool_calls:
+                    final = "\n\n".join(collected_parts)
+                    return _fix_blockquote_display_math(final)
+
+                for tool_call in message.tool_calls:
+                    func_name = tool_call.function.name
+                    raw_args = tool_call.function.arguments or ""
+                    try:
+                        arguments = json.loads(raw_args)
+                        if not isinstance(arguments, dict):
+                            raise ValueError("arguments 必须是 JSON 对象")
+                    except (json.JSONDecodeError, ValueError) as err:
+                        result = json.dumps(
+                            {"error": f"工具调用参数 arguments 不是合法 JSON 对象 ({err})，请修正 JSON 语法后重试"},
+                            ensure_ascii=False,
+                        )
+                        self.messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "content": result,
+                        })
+                        continue
+
+                    result = ToolRegistry.call_tool(func_name, arguments)
+
+                    if on_tool_call:
+                        on_tool_call(func_name, arguments, result)
+
+                    formatted = _format_tool_result_md(func_name, arguments, result)
+                    if formatted is not None:
+                        collected_parts.append(formatted)
+
+                    self.messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": result,
+                    })
+
+            collected_parts.append(
+                "\n\n> ⚠️ 达到最大工具调用次数"
+                f" {self.max_iterations} 次。"
+                " 可设置环境变量 `AI4MATH_MAX_ITERATIONS` 调整上限。"
             )
-
-            choice = response.choices[0]
-            message = choice.message
-            self.messages.append(message.model_dump())
-
-            if message.content:
-                collected_parts.append(message.content)
-                if on_response:
-                    on_response(message.content)
-
-            if choice.finish_reason == "length":
-                self.messages.append({
-                    "role": "user",
-                    "content": "继续（从上次截断处接着写，不要重复已输出的内容）",
-                })
-                continue
-
-            if not message.tool_calls:
-                final = "\n\n".join(collected_parts)
-                return _fix_blockquote_display_math(final)
-
-            for tool_call in message.tool_calls:
-                func_name = tool_call.function.name
-                try:
-                    arguments = json.loads(
-                        tool_call.function.arguments,
-                    )
-                except json.JSONDecodeError:
-                    arguments = {}
-
-                result = ToolRegistry.call_tool(
-                    func_name, arguments,
-                )
-
-                if on_tool_call:
-                    on_tool_call(func_name, arguments, result)
-
-                formatted = _format_tool_result_md(
-                    func_name, arguments, result,
-                )
-                if formatted is not None:
-                    collected_parts.append(formatted)
-
-                self.messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": result,
-                })
-
-        collected_parts.append(
-            "\n\n> ⚠️ 达到最大工具调用次数"
-            f" {self.max_iterations} 次。"
-            " 可设置环境变量 `AI4MATH_MAX_ITERATIONS` 调整上限。"
-        )
-        final = "\n\n".join(collected_parts)
-        return _fix_blockquote_display_math(final)
+            final = "\n\n".join(collected_parts)
+            return _fix_blockquote_display_math(final)
+        except KeyboardInterrupt:
+            # Roll back incomplete turn so interactive REPL history remains valid
+            self.messages = self.messages[:msg_checkpoint]
+            raise
