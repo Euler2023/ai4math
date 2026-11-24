@@ -317,12 +317,17 @@ def moment_generating_function(dist_type: str, params: str = "{}") -> str:
     """
     p = _parse_params(params)
     X = _make_distribution(dist_type, p)
-    t = _sym("t")
+    t = sp.Symbol("t", real=True)
 
     try:
-        raw_mgf = sp_stats.E(sp.exp(t * X))
+        try:
+            raw_mgf = sp_stats.moment_generating_function(X)(t)
+        except Exception:
+            raw_mgf = sp_stats.E(sp.exp(t * X))
+        if hasattr(raw_mgf, "rewrite"):
+            raw_mgf = raw_mgf.rewrite(sp.factorial)
         if hasattr(raw_mgf, "doit"):
-            raw_mgf = raw_mgf.doit()
+            raw_mgf = raw_mgf.doit(deep=True)
         mgf = sp.simplify(raw_mgf)
         return _result(
             "矩母函数 M_X(t)",
@@ -401,12 +406,17 @@ def characteristic_function(dist_type: str, params: str = "{}") -> str:
     """
     p = _parse_params(params)
     X = _make_distribution(dist_type, p)
-    t = _sym("t")
+    t = sp.Symbol("t", real=True)
 
     try:
-        raw_cf = sp_stats.E(sp.exp(sp.I * t * X))
+        try:
+            raw_cf = sp_stats.characteristic_function(X)(t)
+        except Exception:
+            raw_cf = sp_stats.E(sp.exp(sp.I * t * X))
+        if hasattr(raw_cf, "rewrite"):
+            raw_cf = raw_cf.rewrite(sp.factorial)
         if hasattr(raw_cf, "doit"):
-            raw_cf = raw_cf.doit()
+            raw_cf = raw_cf.doit(deep=True)
         cf = sp.simplify(raw_cf)
         return _result(
             "特征函数 φ_X(t)",

@@ -133,6 +133,10 @@ def safe_parse_expr(
         raise ValueError(f"表达式长度超过安全上限 ({MAX_EXPR_LENGTH})")
 
     eff_locals = dict(local_dict) if local_dict is not None else make_local_dict()
+    # Map Python keyword 'lambda' and Greek 'λ' to a valid identifier bound to Symbol("lambda")
+    if re.search(r"\blambda\b|λ", cleaned):
+        cleaned = re.sub(r"\blambda\b|λ", "sym_lambda", cleaned)
+        eff_locals.setdefault("sym_lambda", eff_locals.get("lambda", sp.Symbol("lambda")))
     # If gamma(...) or beta(...) is called as a function, expose sp.gamma / sp.beta
     # instead of shadowing them with a plain Symbol (which implicit_multiplication turns into gamma*x).
     for fn_name in ("gamma", "beta", "zeta", "catalan", "bell", "bernoulli", "fibonacci", "lucas"):

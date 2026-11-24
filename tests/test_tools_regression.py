@@ -176,14 +176,17 @@ class TestSymPyToolsAndPlottingRegression(unittest.TestCase):
                 self.assertIn(d_u["output"], ("3/10", "0.3"))
 
     def test_poisson_mgf_closed_form(self):
-        raw = ToolRegistry.call_tool(
-            "moment_generating_function",
-            {"dist_type": "poisson", "params": '{"lambda": 2}'},
-        )
-        data = json.loads(raw)
-        self.assertNotIn("error", data)
-        self.assertNotIn("Sum", data["output"])
-        self.assertIn("e", data["latex"])
+        for params in ('{"lambda": 2}', '{"lambda": "lambda"}'):
+            with self.subTest(params=params):
+                raw = ToolRegistry.call_tool(
+                    "moment_generating_function",
+                    {"dist_type": "poisson", "params": params},
+                )
+                data = json.loads(raw)
+                self.assertNotIn("error", data)
+                self.assertNotIn("Sum", data["output"])
+                self.assertNotIn("\\sum", data["latex"])
+                self.assertIn("e", data["latex"])
 
     def test_b21_compute_sum_default_lower_bound(self):
         from ai4math.tools.analysis import compute_sum
@@ -564,6 +567,21 @@ class TestSageToolsRegression(unittest.TestCase):
         d_gal = json.loads(ToolRegistry.call_tool("galois_group", {"poly": "x**4 - 2"}))
         self.assertNotIn("error", d_gal)
         self.assertNotIn("PARI group", d_gal["latex"])
+
+    def test_sage_plotting_with_title(self):
+        raw = ToolRegistry.call_tool(
+            "sage_plot",
+            {"expr": "sin(x), cos(x)", "x_min": "-pi", "x_max": "pi", "title": "Sage Trig Plot"},
+        )
+        data = json.loads(raw)
+        path = data.get("image_path", "")
+        try:
+            self.assertNotIn("error", data)
+            self.assertEqual(data["title"], "Sage Trig Plot")
+            self.assertTrue(os.path.isfile(path))
+        finally:
+            if path and os.path.exists(path):
+                os.remove(path)
 
 
 if __name__ == "__main__":

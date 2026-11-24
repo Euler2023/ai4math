@@ -1,6 +1,8 @@
 # AI4Math - LLM 数学工具调用系统
 
-让大语言模型通过工具调用进行精确的符号数学计算，基于 **SymPy** + **SageMath** 双引擎，涵盖 **数学分析**、**抽象代数**、**概率论**、**数论**、**组合数学**、**可视化** 等领域。
+**简体中文** | **[English](README_EN.md)** | **[综合示例 Demo（计算 · 证明 · 可视化）](examples/demo_showcase.md)**
+
+让大语言模型通过工具调用进行精确的符号数学计算，基于 **SymPy** + **SageMath** 双引擎，涵盖 **数学分析**、**抽象代数**、**概率论**、**数论**、**组合数学**、**形式化辅助证明**、**可视化** 等领域。
 
 输出格式为 Obsidian 兼容的 Markdown + LaTeX，可直接粘贴到笔记中。
 
@@ -273,6 +275,12 @@ ai4math/
 │   └── llm/
 │       ├── __init__.py
 │       └── client.py            # LLM 客户端 + 预规划阶段
+├── examples/                    # 综合示例 Demo（计算 + 简单证明 + 可视化）
+│   ├── README.md                # 示例说明与运行指南
+│   ├── run_demo.py              # 一键生成图文案例脚本（支持离线引擎与 --llm 模式）
+│   ├── demo_questions.md        # 三合一批处理演示题单
+│   ├── demo_showcase.md         # 实跑生成的完整计算/证明/可视化报告
+│   └── assets/                  # 示例生成的函数、区域与复变色相图
 ├── scripts/
 │   ├── eval_solutions.py        # 参考答案与工具基准核验脚本
 │   ├── galois_group_deg22.sage  # 22 次多项式 Galois 群实验脚本
@@ -285,7 +293,8 @@ ai4math/
 │   └── *.md                     # 批处理题集与高难度参考解答
 ├── pyproject.toml
 ├── .env.example
-└── README.md
+├── README.md                    # 中文主文档
+└── README_EN.md                 # 英文文档 (English README)
 ```
 
 ## 安全说明
@@ -430,6 +439,10 @@ export AI4MATH_THEOREM_EXTERNAL_URL=https://example.com/theorems.json
 
 ## 更新日志
 
+### v0.2.6 — 2026-11-24
+- **综合示例中心 (`examples/`)**：新增可独立运行的 [`examples/run_demo.py`](examples/run_demo.py)、批处理题集 [`examples/demo_questions.md`](examples/demo_questions.md) 与实跑生成的图文报告 [`examples/demo_showcase.md`](examples/demo_showcase.md)，完整覆盖符号计算、简单数论证明与多类型可视化（函数曲线、不等式区域、复变色相图）
+- **双语文档与引用说明**：新增英文版文档 [`README_EN.md`](README_EN.md)，在中文主 `README.md` 顶部提供语言切换与示例直达链接，并补充项目 BibTeX 引用格式
+
 ### v0.2.5 — 2026-11-24
 - **安全加固**：
   - 子进程自动剥离 `OPENAI_API_KEY` 等敏感环境变量，防止密钥随代码执行结果外泄
@@ -517,3 +530,17 @@ export AI4MATH_THEOREM_EXTERNAL_URL=https://example.com/theorems.json
 - LLM 客户端支持 OpenAI 兼容 API 的 tool calling
 - 交互式 CLI（基于 Rich）
 - 独立 conda 环境 `ai4math`（Python 3.12）
+
+## 引用 (Citation)
+
+如果本项目对你的数学研究、教学或笔记工作流有所帮助，欢迎按以下格式引用：
+
+```bibtex
+@software{ai4math2026,
+  author       = {Euler2023},
+  title        = {AI4Math: LLM-Powered Symbolic Mathematics, Proof Assistance, and Visualization System},
+  year         = {2026},
+  version      = {0.2.6},
+  url          = {https://github.com/Euler2023/ai4math}
+}
+```

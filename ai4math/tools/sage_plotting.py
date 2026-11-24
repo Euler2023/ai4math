@@ -29,7 +29,6 @@ def _save_sage(plot_obj, name: str, title: str = "") -> str:
     try:
         plot_obj.save(path, **save_kwargs)
     except TypeError:
-        # 3D Tachyon/Jmol plots may not accept title/dpi kwargs directly
         try:
             plot_obj.save(path, dpi=150)
         except TypeError:
@@ -77,7 +76,7 @@ def sage_plot(expr: str, x_min: str = "-10", x_max: str = "10", title: str = "")
             p = pi if p is None else p + pi
         p.axes_labels(["$x$", "$y$"])
         path = _save_sage(p, "sage_func", title=title)
-        return _result("SageMath function plot", image_path=path, title=title or "SageMath function plot", output=f"Plotted {len(exprs)} function(s)")
+        return _result(title or "SageMath function plot", image_path=path, output=f"Plotted {len(exprs)} function(s)")
     except Exception as e:
         return _result("Plot error", error=str(e))
 
@@ -100,7 +99,7 @@ def sage_implicit_plot(equation: str, x_range: str = "-5,5", y_range: str = "-5,
         yr = _parse_range(y_range)
         p = sa.implicit_plot(eq, (x, xr[0], xr[1]), (y, yr[0], yr[1]))
         path = _save_sage(p, "sage_implicit", title=title)
-        return _result("SageMath implicit curve", image_path=path, title=title or "SageMath implicit curve", output="Plotted implicit curve")
+        return _result(title or "SageMath implicit curve", image_path=path, output="Plotted implicit curve")
     except Exception as e:
         return _result("Plot error", error=str(e))
 
@@ -134,7 +133,7 @@ def sage_region_plot(inequalities: str, x_range: str = "-5,5", y_range: str = "-
             alpha=0.4,
         )
         path = _save_sage(p, "sage_region", title=title)
-        return _result("SageMath region plot", image_path=path, title=title or "SageMath region plot", output="Plotted inequality region")
+        return _result(title or "SageMath region plot", image_path=path, output="Plotted inequality region")
     except Exception as e:
         return _result("Plot error", error=str(e))
 
@@ -157,7 +156,7 @@ def sage_plot_3d(expr: str, x_range: str = "-5,5", y_range: str = "-5,5", title:
         yr = _parse_range(y_range)
         p = sa.plot3d(se, (x, xr[0], xr[1]), (y, yr[0], yr[1]))
         path = _save_sage(p, "sage_3d", title=title)
-        return _result("SageMath 3D surface", image_path=path, title=title or "SageMath 3D surface", output="Plotted 3D surface")
+        return _result(title or "SageMath 3D surface", image_path=path, output="Plotted 3D surface")
     except Exception as e:
         return _result("Plot error", error=str(e))
 
@@ -180,6 +179,6 @@ def sage_complex_plot(expr: str, x_range: str = "-5,5", y_range: str = "-5,5", t
         yr = _parse_range(y_range)
         p = sa.complex_plot(se, (xr[0], xr[1]), (yr[0], yr[1]))
         path = _save_sage(p, "sage_complex", title=title)
-        return _result("SageMath complex plot", image_path=path, title=title or "SageMath complex plot", output="Plotted complex function phase portrait")
+        return _result(title or "SageMath complex plot", image_path=path, output="Plotted complex function phase portrait")
     except Exception as e:
         return _result("Plot error", error=str(e))
