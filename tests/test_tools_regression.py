@@ -147,6 +147,20 @@ class TestSymPyToolsAndPlottingRegression(unittest.TestCase):
         self.assertNotIn("error", data)
         self.assertTrue(os.path.isfile(path))
 
+    def test_plot_riemann_surface_sqrt_log_and_multibranch(self):
+        cases = [
+            {"expr": "sqrt(x)", "variable": "x", "sheets": 2, "height_part": "auto", "radius": 2.0, "title": "Sqrt Riemann Surface"},
+            {"expr": "log(z)", "variable": "z", "sheets": 2, "height_part": "auto", "radius": 2.0, "title": "Log Riemann Surface"},
+            {"expr": "sqrt(z**2 - 1)", "variable": "z", "sheets": 2, "height_part": "real", "radius": 2.0, "title": "Two Branch Points"},
+        ]
+        for kwargs in cases:
+            with self.subTest(expr=kwargs["expr"]):
+                raw = ToolRegistry.call_tool("plot_riemann_surface", kwargs)
+                data = json.loads(raw)
+                path = self._track_plot(data)
+                self.assertNotIn("error", data, msg=f"Failed for {kwargs['expr']}: {data}")
+                self.assertTrue(os.path.isfile(path))
+
     def test_b18_compute_variance_exact_rational_float_param(self):
         raw = ToolRegistry.call_tool(
             "compute_variance",

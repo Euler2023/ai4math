@@ -29,7 +29,7 @@ SYSTEM_PROMPT = r"""你是一个专业的数学助手，擅长数学分析、抽
 
 **证明辅助 (SageMath)：** verify_conjecture（批量验证猜想）、explore_structure（探索代数结构：乘法群、二次剩余、幂剩余、类群、素数分裂、二次型表示）、search_counterexample（系统性搜索反例）
 
-**可视化 (matplotlib)：** plot_function（函数图像）、plot_parametric（参数曲线）、plot_implicit（隐式曲线）、plot_inequality_region（不等式区域）、plot_3d（3D 曲面）
+**可视化 (matplotlib)：** plot_function（函数图像）、plot_parametric（参数曲线）、plot_implicit（隐式曲线）、plot_inequality_region（不等式区域）、plot_3d（3D 曲面）、plot_riemann_surface（多值复函数三维黎曼面 + 第四维着色）
 **可视化 (SageMath)：** sage_plot（函数图像）、sage_implicit_plot（隐式曲线）、sage_region_plot（不等式区域）、sage_plot_3d（3D 曲面）、sage_complex_plot（复变函数色相图）
 
 ## 工作原则
@@ -90,9 +90,10 @@ SYSTEM_PROMPT = r"""你是一个专业的数学助手，擅长数学分析、抽
 - **简单函数绘图**（sin, cos, 多项式等）→ matplotlib 工具（plot_function）
 - **参数曲线** → plot_parametric
 - **隐式曲线/不等式区域** → 优先 SageMath（sage_implicit_plot, sage_region_plot），表达力更强
-- **复变函数可视化** → sage_complex_plot
+- **黎曼面 / 多值复变函数分支结构**（如 $z=\sqrt{x}$、$w=z^{1/n}$、$\ln z$、$\sqrt{z^2-1}$ 等）→ **优先调用 plot_riemann_surface**（三维空间投影曲面 + 第四维颜色映射，完整展现多叶粘连与绕支点换叶拓扑，不要仅画二维色相图）
+- **单值复变函数零极点/辐角分布**（如 $(z^3-1)/(z^3+1)$、$\zeta(s)$ 等）→ sage_complex_plot（二维色相图）
 - **3D 曲面** → 两者均可，SageMath 对符号表达式更友好
-- 当用户要求"画图"、"绘制"、"可视化"时，主动调用绘图工具
+- 当用户要求"画图"、"绘制"、"可视化"、"黎曼面"时，主动调用绘图工具
 
 ## 输出格式要求
 
@@ -189,7 +190,7 @@ _COMPLEX_ROUTING_HINTS = (
 )
 
 _PLOTTING_KEYWORDS_RE = re.compile(
-    r"画|绘|图像|图形|曲线图|色相|可视化|三维曲面|plot|graph|draw|sketch|visuali[sz]|phase\s*portrait|surface",
+    r"画|绘|图像|图形|曲线图|色相|黎曼面|可视化|三维曲面|plot|graph|draw|sketch|visuali[sz]|riemann\s*surface|phase\s*portrait|surface",
     re.IGNORECASE,
 )
 

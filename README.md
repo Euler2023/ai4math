@@ -84,6 +84,7 @@
 | `plot_implicit` | 隐式曲线 f(x,y)=0 |
 | `plot_inequality_region` | 不等式区域填充（支持多条件交集） |
 | `plot_3d` | 三维曲面 z=f(x,y) |
+| `plot_riemann_surface` | 多值复变函数三维黎曼面 + 第四维颜色映射（如 $\sqrt{x}$、$z^{1/n}$、$\ln z$、$\sqrt{z^2-1}$） |
 
 ### 📈 可视化 (SageMath)
 | 工具 | 功能 |
@@ -439,6 +440,10 @@ export AI4MATH_THEOREM_EXTERNAL_URL=https://example.com/theorems.json
 
 ## 更新日志
 
+### v0.2.7 — 2026-11-24
+- **三维黎曼面可视化 (`plot_riemann_surface`)**：新增“三维空间投影 + 第四维颜色映射”的黎曼面绘图工具，支持单支点幂函数极坐标单值化（如 $z=\sqrt{x}$、$z^{1/n}$）、对数螺旋黎曼面（$\ln z$）及多支点代数函数解析延拓拼合（如 $\sqrt{z^2-1}$），并在 System Prompt 中区分多值黎曼面（走 3D 曲面）与单值零极点（走 2D 色相图）
+- **示例中心升级 (`examples/`)**：在 [`examples/demo_showcase.md`](examples/demo_showcase.md) 中新增 **$z = \sqrt{x}$ 三维四维着色黎曼面** 与 **Riemann Zeta 函数 $\zeta(s)$ 专题案例**（特殊点精确符号值、函数方程数值检验、临界线非平凡零点及复平面零极点色相图）
+
 ### v0.2.6 — 2026-11-24
 - **综合示例中心 (`examples/`)**：新增可独立运行的 [`examples/run_demo.py`](examples/run_demo.py)、批处理题集 [`examples/demo_questions.md`](examples/demo_questions.md) 与实跑生成的图文报告 [`examples/demo_showcase.md`](examples/demo_showcase.md)，完整覆盖符号计算、简单数论证明与多类型可视化（函数曲线、不等式区域、复变色相图）
 - **双语文档与引用说明**：新增英文版文档 [`README_EN.md`](README_EN.md)，在中文主 `README.md` 顶部提供语言切换与示例直达链接，并补充项目 BibTeX 引用格式
@@ -540,7 +545,7 @@ export AI4MATH_THEOREM_EXTERNAL_URL=https://example.com/theorems.json
   author       = {Euler2023},
   title        = {AI4Math: LLM-Powered Symbolic Mathematics, Proof Assistance, and Visualization System},
   year         = {2026},
-  version      = {0.2.6},
+  version      = {0.2.7},
   url          = {https://github.com/Euler2023/ai4math}
 }
 ```

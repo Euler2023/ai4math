@@ -16,11 +16,11 @@
 - **Proof Assistance**:
   - Built-in `construct_proof`, `verify_conjecture`, `explore_structure`, and `search_counterexample` tools for rigorous algebraic verification and counterexample hunting.
 - **Mathematical Visualization**:
-  - 10 plotting tools across **matplotlib** and **SageMath** (1D curves, parametric curves, implicit curves, inequality region intersections, 3D surfaces, and complex phase portraits).
+  - 11 plotting tools across **matplotlib** and **SageMath**, including 3D Riemann surfaces with 4th-dimension coloring (`plot_riemann_surface` for $\sqrt{x}$, $z^{1/n}$, $\log z$, $\sqrt{z^2-1}$), 1D/parametric/implicit curves, inequality region intersections, 3D surfaces, and complex phase portraits.
 
 ---
 
-## Tool Overview (57 Registered Tools)
+## Tool Overview (58 Registered Tools)
 
 | Category | Engine | Representative Tools |
 |---|---|---|
@@ -30,7 +30,7 @@
 | **Advanced Algebra & Number Theory** | SageMath | `finite_field_polynomial`, `groebner_basis`, `ideal_membership`, `number_field_info`, `galois_group`, `galois_group_chebotarev`, `elliptic_curve_info`, `advanced_group_theory`, `lattice_operation`, `number_theory_operation` |
 | **Analysis, Combinatorics & General** | SageMath | `sage_integrate`, `sage_simplify`, `combinatorics_operation`, `sage_eval` |
 | **Proof Support** | SageMath | `construct_proof`, `verify_conjecture`, `explore_structure`, `search_counterexample` |
-| **Visualization** | Matplotlib / Sage | `plot_function`, `plot_parametric`, `plot_implicit`, `plot_inequality_region`, `plot_3d`, `sage_plot`, `sage_implicit_plot`, `sage_region_plot`, `sage_plot_3d`, `sage_complex_plot` |
+| **Visualization** | Matplotlib / Sage | `plot_function`, `plot_parametric`, `plot_implicit`, `plot_inequality_region`, `plot_3d`, `plot_riemann_surface`, `sage_plot`, `sage_implicit_plot`, `sage_region_plot`, `sage_plot_3d`, `sage_complex_plot` |
 | **Planning & Advisor** | Built-in | `theorem_advisor` + Domain Theorem Plugins |
 
 ---
@@ -150,7 +150,7 @@ If AI4Math is helpful in your research or notes workflow, you may cite it as:
   author       = {Euler2023},
   title        = {AI4Math: LLM-Powered Symbolic Mathematics, Proof Assistance, and Visualization System},
   year         = {2026},
-  version      = {0.2.6},
+  version      = {0.2.7},
   url          = {https://github.com/Euler2023/ai4math}
 }
 ```
