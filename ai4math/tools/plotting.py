@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import math
 from pathlib import Path
 
@@ -51,8 +52,11 @@ def _parse_range_pair(range_str: str) -> tuple[float, float]:
     return parse_float_expr(parts[0]), parse_float_expr(parts[1])
 
 
+_HAS_SCIPY = importlib.util.find_spec("scipy") is not None
+
+
 def _eval_1d(var: sp.Symbol, sym_expr: sp.Expr, xv: np.ndarray) -> np.ndarray:
-    modules = [_CUSTOM_NUMPY_MAP, "numpy", "scipy", "math"]
+    modules = [_CUSTOM_NUMPY_MAP, "numpy"] + (["scipy"] if _HAS_SCIPY else []) + ["math"]
     f = sp.lambdify(var, sym_expr, modules=modules)
     try:
         raw = f(xv)
@@ -71,7 +75,7 @@ def _eval_1d(var: sp.Symbol, sym_expr: sp.Expr, xv: np.ndarray) -> np.ndarray:
 
 
 def _eval_2d(x_sym: sp.Symbol, y_sym: sp.Symbol, sym_expr: sp.Expr, X: np.ndarray, Y: np.ndarray) -> np.ndarray:
-    modules = [_CUSTOM_NUMPY_MAP, "numpy", "scipy"]
+    modules = [_CUSTOM_NUMPY_MAP, "numpy"] + (["scipy"] if _HAS_SCIPY else [])
     f = sp.lambdify((x_sym, y_sym), sym_expr, modules=modules)
     raw = f(X, Y)
     arr = np.broadcast_to(np.asarray(raw), X.shape)
